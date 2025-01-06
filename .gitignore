@@ -73,3 +73,6 @@ crashlytics-build.properties
 
 # DS_store
 .DS_Store
+
+# VSCode settings and workspace files
+.vscode/
