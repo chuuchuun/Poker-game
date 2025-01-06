@@ -27,8 +27,8 @@ public class DifficultyScreen : MonoBehaviour
         FlowCoordinator.HardMode();
     }
 
-    public void Back()
+    public void BackToModeSelection()
     {
-        FlowCoordinator.Back();
+        FlowCoordinator.BackToModeSelection();
     }
 }
