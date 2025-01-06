@@ -16,9 +16,9 @@ public class DifficultyScreenFlowCoordinatorImpl: DifficultyScreenFlowCoordinato
         Debug.Log("Hard mode start");
     }
 
-    public void Back()
+    public void BackToModeSelection()
     {
-        Debug.Log("Back");
-        //SceneManager.LoadScene("ModeSelectionScene");
+        Debug.Log("Back to mode selection");
+        //SceneManager.LoadScene("ModeSelectionScreen");
     }
 }
