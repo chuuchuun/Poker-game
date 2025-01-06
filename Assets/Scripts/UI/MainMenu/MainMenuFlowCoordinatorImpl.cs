@@ -10,6 +10,6 @@ public class MainMenuFlowCoordinatorImpl: MainMenuFlowCoordinator {
     }
 
     public void ExitGame() {
-        Debug.Log("Exit game");
+        Application.Quit();
     }
 }

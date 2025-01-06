@@ -139,11 +139,6 @@ public class PokerAlert: MonoBehaviour {
         {
             Destroy(alertPanel);
             alertPanel = null;
-            Debug.Log("Alert removed.");
-        }
-        else
-        {
-            Debug.LogWarning("No alert to remove.");
         }
     }
 }
