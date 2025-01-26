@@ -84,7 +84,7 @@ public class RoundModel : MonoBehaviour
     void Start()
     {
         dealCards();
-        addCardOnTable(2);
+        addCardOnTable(5);
     }
 
     // Update is called once per frame
