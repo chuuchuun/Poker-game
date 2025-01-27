@@ -24,7 +24,7 @@ public class PlayerController : MonoBehaviour
     public List<Transform> cardSlots;
     
 
-    public TMP_Text callText;
+    private TMP_Text callText;
     public TMP_Text checkText;
     public TMP_Text foldText;
     public TMP_Text raiseText;
@@ -33,6 +33,7 @@ public class PlayerController : MonoBehaviour
 
     public List<BetAction> getAvailableActions()
     {
+        ResetActionText();
         List<BetAction> availableActions = new List<BetAction>
         {
             BetAction.check,
@@ -44,6 +45,11 @@ public class PlayerController : MonoBehaviour
         {
             availableActions.Add(BetAction.raise);
             availableActions.Add(BetAction.reRaise);
+        }
+        else
+        {
+            availableActions.Remove(BetAction.raise);
+            availableActions.Remove(BetAction.reRaise);
         }
         foreach (BetAction action in availableActions)
         {
@@ -187,14 +193,46 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    private void Awake()
+    void PopulateActionTexts()
+    {
+        List<TMP_Text> texts = FindObjectsOfType<TMP_Text>().ToList();
+        foreach (TMP_Text text in texts)
+        {
+            switch (text.tag)
+            {
+                case "call_text":
+                    callText = text;
+                    break;
+                case "check_text":
+                    checkText = text;
+                    break;
+                case "fold_text":
+                    foldText = text;
+                    break;
+                case "raise_text":
+                    raiseText = text;
+                    break;
+                case "reraise_text":
+                    reraiseText = text;
+                    break;
+            }
+        }
+        ResetActionText();
+        
+    }
+
+    void ResetActionText()
     {
         callText.enabled = false;
         checkText.enabled = false;
         foldText.enabled = false;
         raiseText.enabled = false;
         reraiseText.enabled = false;
+    }
+    private void Awake()
+    {
 
+       PopulateActionTexts();
         input = GetComponent<PlayerInput>();
         if (input != null)
         {
@@ -309,8 +347,6 @@ public class PlayerController : MonoBehaviour
         }
 
         getAvailableActions();
-
-
     }
 
 
