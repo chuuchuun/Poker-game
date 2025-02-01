@@ -337,7 +337,8 @@ public class PlayerController : MonoBehaviour
             {
                 if (slot.childCount == 0)
                 {
-                    cardObject.transform.Rotate(30f, 180f, 0);
+                    // Rotate the card based on the player's rotation
+                    cardObject.transform.rotation = Quaternion.Euler(30f, transform.eulerAngles.y + 180f, 0);  // Use player's Y rotation for card rotation
                     cardObject.transform.SetParent(slot);
                     cardObject.transform.localPosition = Vector3.zero;
                     Debug.Log("Assigned card to slot: " + slot.name);
@@ -348,6 +349,7 @@ public class PlayerController : MonoBehaviour
 
         getAvailableActions();
     }
+
 
 
 
