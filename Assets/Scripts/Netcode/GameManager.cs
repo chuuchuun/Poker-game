@@ -3,7 +3,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 
-public class GameManager : MonoBehaviour
+public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance;  
     public GameObject playerPrefab;  
@@ -29,7 +29,7 @@ public class GameManager : MonoBehaviour
         NetworkManager.Singleton.StartHost();
         Debug.Log("Hosting the game...");
         StartCoroutine(DelayedSpawnHost());
-    }
+   }
 
     private IEnumerator DelayedSpawnHost()
     {

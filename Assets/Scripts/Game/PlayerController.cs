@@ -3,11 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
+using Unity.Netcode;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController : NetworkBehaviour
 {
     private string userID;
     private PlayerInput input;
@@ -30,6 +31,14 @@ public class PlayerController : MonoBehaviour
     public TMP_Text raiseText;
     public TMP_Text reraiseText;
 
+
+    public override void OnNetworkSpawn()
+    {
+        if (!IsOwner)
+        {
+            gameObject.SetActive(true); // Make sure the model is visible to others
+        }
+    }
 
     public List<BetAction> getAvailableActions()
     {
@@ -231,7 +240,15 @@ public class PlayerController : MonoBehaviour
     }
     private void Awake()
     {
-
+        List<Transform> children = gameObject.GetComponentsInChildren<Transform>().ToList();
+        foreach(Transform transform in children)
+        {
+            if (transform.CompareTag("slot"))
+            {
+                cardSlots.Add(transform);
+                Debug.Log($"aDDED CARD SLOT {transform.name}");
+            }
+        }
        PopulateActionTexts();
         input = GetComponent<PlayerInput>();
         if (input != null)
@@ -329,26 +346,10 @@ public class PlayerController : MonoBehaviour
     }
 
     void Update()
-    {
-        foreach (CardModel card in cardsInHand)
-        {
-            GameObject cardObject = card.gameObject;
-            foreach (Transform slot in cardSlots)
-            {
-                if (slot.childCount == 0)
-                {
-                    // Rotate the card based on the player's rotation
-                    cardObject.transform.rotation = Quaternion.Euler(30f, transform.eulerAngles.y + 180f, 0);  // Use player's Y rotation for card rotation
-                    cardObject.transform.SetParent(slot);
-                    cardObject.transform.localPosition = Vector3.zero;
-                    Debug.Log("Assigned card to slot: " + slot.name);
-                    break;
-                }
-            }
-        }
+{
 
-        getAvailableActions();
-    }
+    getAvailableActions();
+}
 
 
 

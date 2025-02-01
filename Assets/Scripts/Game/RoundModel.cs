@@ -1,8 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
-public class RoundModel : MonoBehaviour
+public class RoundModel : NetworkBehaviour
 {
     private List<PlayerController> playerModels = new List<PlayerController>();
     private List<CardModel> deck = new List<CardModel>();
@@ -25,7 +26,6 @@ public class RoundModel : MonoBehaviour
 
     private void Update()
     {
-        // Check for any new players and deal them cards if necessary
         CheckAndDealCardsToNewPlayers();
     }
 
@@ -72,27 +72,55 @@ public class RoundModel : MonoBehaviour
         }
         //InitializeDeckAndPlayers();
         // Loop through all player controllers and check if they already have cards
-        foreach (PlayerController playerModel in playerModels)
-        {
-            // Deal cards only if the player doesn't already have cards
-            if (playerModel.cardsInHand.Count == 0)
+        
+        
+            foreach (PlayerController playerModel in playerModels)
             {
-                Debug.Log("Dealing cards to new player: " + playerModel.name);
-                DealCardsToPlayer(playerModel);
+                // Deal cards only if the player doesn't already have cards
+                if (playerModel.cardsInHand.Count == 0)
+                {
+                    Debug.Log("Dealing cards to new player: " + playerModel.name);
+                    DealCardsToPlayer(playerModel);
+                }
             }
-        }
+       
     }
+
 
     private void DealCardsToPlayer(PlayerController playerModel)
     {
-        // Deal 2 cards to the player
+        HashSet<int> usedSlots = new HashSet<int>(); // Track assigned slots
+
         for (int i = 0; i < 2; i++)
         {
             CardModel randomCard = deck[Random.Range(0, deck.Count)];
             playerModel.cardsInHand.Add(randomCard);
             deck.Remove(randomCard);
         }
+
+        foreach (CardModel card in playerModel.cardsInHand)
+        {
+            GameObject cardObject = card.gameObject;
+
+            for (int i = 0; i < playerModel.cardSlots.Count; i++)
+            {
+                if (!usedSlots.Contains(i)) // Check if slot is free
+                {
+                    Transform slot = playerModel.cardSlots[i];
+
+                    cardObject.transform.SetParent(null);
+                    cardObject.transform.position = slot.position;
+                    cardObject.transform.rotation = Quaternion.Euler(0, 180f, 0);
+
+                    usedSlots.Add(i); // Mark slot as used
+                    Debug.Log($"Assigned card to slot: {slot.name}");
+                    break; // Stop searching for a slot once assigned
+                }
+            }
+        }
     }
+
+
 
     public void dealCards()
     {
@@ -105,28 +133,33 @@ public class RoundModel : MonoBehaviour
 
     public void addCardOnTable(int cardCount)
     {
-        for (int i = 0; i < cardCount; i++)
+        if (NetworkManager.IsHost)
         {
-            if (deck.Count == 0)
-            {
-                Debug.LogWarning("No more cards in the deck!");
-                break;
-            }
 
-            CardModel randomCard = deck[Random.Range(0, deck.Count)];
-            cardsOnTable.Add(randomCard);
-            deck.Remove(randomCard);
-
-            foreach (Transform slot in cardSlots)
+            for (int i = 0; i < cardCount; i++)
             {
-                if (slot.childCount == 0)
+                if (deck.Count == 0)
                 {
-                    GameObject cardObject = randomCard.gameObject;
-                    cardObject.transform.Rotate(0, 180f, 0);
-                    cardObject.transform.SetParent(slot);
-                    cardObject.transform.localPosition = Vector3.zero;
-                    Debug.Log("Assigned card to slot: " + slot.name);
+                    Debug.LogWarning("No more cards in the deck!");
                     break;
+                }
+
+
+                CardModel randomCard = deck[Random.Range(0, deck.Count)];
+                cardsOnTable.Add(randomCard);
+                deck.Remove(randomCard);
+
+                foreach (Transform slot in cardSlots)
+                {
+                    if (slot.childCount == 0)
+                    {
+                        GameObject cardObject = randomCard.gameObject;
+                        cardObject.transform.Rotate(0, 180f, 0);
+                        cardObject.transform.SetParent(slot);
+                        cardObject.transform.localPosition = Vector3.zero;
+                        Debug.Log("Assigned card to slot: " + slot.name);
+                        break;
+                    }
                 }
             }
         }
