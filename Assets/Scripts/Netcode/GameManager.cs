@@ -1,13 +1,13 @@
-using Unity.Netcode;
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 
 public class GameManager : NetworkBehaviour
 {
-    public static GameManager Instance;  
-    public GameObject playerPrefab;  
-    public Transform[] spawnPoints;  
+    public static GameManager Instance;
+    public GameObject playerPrefab;
+    public Transform[] spawnPoints;
 
     private Dictionary<ulong, int> playerSpawnIndices = new Dictionary<ulong, int>();
 
@@ -24,12 +24,30 @@ public class GameManager : NetworkBehaviour
         }
     }
 
+    private void Start()
+    {
+        // Register callbacks manually
+        NetworkManager.Singleton.OnServerStarted += OnServerStarted;
+        NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+
+        Debug.Log("Callbacks manually registered.");
+    }
+
+    override public void OnDestroy()
+    {
+        // Unregister callbacks when the object is destroyed
+        NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
+        NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+
+        Debug.Log("Callbacks manually unregistered.");
+    }
+
     public void StartHost()
     {
         NetworkManager.Singleton.StartHost();
         Debug.Log("Hosting the game...");
         StartCoroutine(DelayedSpawnHost());
-   }
+    }
 
     private IEnumerator DelayedSpawnHost()
     {
@@ -65,19 +83,8 @@ public class GameManager : NetworkBehaviour
         Transform spawnPoint = spawnPoints[spawnIndex];
         GameObject player = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);
         player.GetComponent<NetworkObject>().SpawnAsPlayerObject(clientId);
+
         Debug.Log($"Spawning player {clientId} at {spawnPoint.position}");
-    }
-
-    private void OnEnable()
-    {
-        NetworkManager.Singleton.OnServerStarted += OnServerStarted;
-        NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
-    }
-
-    private void OnDisable()
-    {
-        NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
-        NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
     }
 
     private void OnServerStarted()
