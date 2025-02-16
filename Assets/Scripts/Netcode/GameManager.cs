@@ -54,6 +54,11 @@ public class GameManager : NetworkBehaviour
         yield return new WaitForSeconds(0.5f);
         AssignSpawnPoint(NetworkManager.Singleton.LocalClientId);
     }
+    private IEnumerator DelayedSpawnClient(ulong clientid)
+    {
+        yield return new WaitForSeconds(0.5f);
+        AssignSpawnPoint(clientid);
+    }
 
     public void JoinGame()
     {
@@ -97,5 +102,7 @@ public class GameManager : NetworkBehaviour
     {
         Debug.Log($"Client {clientId} connected");
         AssignSpawnPoint(clientId);
+        //StartCoroutine(DelayedSpawnClient(clientId));
     }
+
 }
