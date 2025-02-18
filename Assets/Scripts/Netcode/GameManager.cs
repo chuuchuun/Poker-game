@@ -29,8 +29,9 @@ public class GameManager : NetworkBehaviour
         // Register callbacks manually
         NetworkManager.Singleton.OnServerStarted += OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
-
+    
         Debug.Log("Callbacks manually registered.");
+    
     }
 
     override public void OnDestroy()
@@ -40,6 +41,7 @@ public class GameManager : NetworkBehaviour
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
 
         Debug.Log("Callbacks manually unregistered.");
+
     }
 
     public void StartHost()

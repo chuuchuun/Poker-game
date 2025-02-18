@@ -77,15 +77,90 @@ public class RoundModel : NetworkBehaviour
             foreach (PlayerController playerModel in playerModels)
             {
                 // Deal cards only if the player doesn't already have cards
-                if (playerModel.cardsInHand.Count == 0)
+                if (playerModel.cardsInHand.Count == 0 && playerModel.IsSpawned)
                 {
                     Debug.Log("Dealing cards to new player: " + playerModel.name);
-                    DealCardsToPlayer(playerModel);
+                    //DealCardsToPlayer(playerModel);
+                    DealCardsToPlayerServerRpc(new NetworkObjectReference(playerModel.GetComponent<NetworkObject>()));
                 }
             }
        
     }
 
+    [ServerRpc(RequireOwnership = false)]
+    private void DealCardsToPlayerServerRpc(NetworkObjectReference playerNetwork)
+    {
+        if(playerNetwork.TryGet(out NetworkObject playerObject))
+        {
+            PlayerController playerModel = playerObject.gameObject.GetComponent<PlayerController>();
+            if(playerModel.cardsInHand.Count < 2)
+            {
+                int limit = 2 - playerModel.cardsInHand.Count;
+                for (int i = 0; i < limit; i++)
+                {
+                    CardModel randomCard = deck[Random.Range(0, deck.Count)];
+                    playerModel.cardsInHand.Add(randomCard);
+                    deck.Remove(randomCard);
+                }
+
+                for (int i = 0; i < playerModel.cardsInHand.Count; i++)
+                {
+                    GameObject cardObject = playerModel.cardsInHand[i].gameObject;
+                    Transform slot = playerModel.cardSlots[i];
+
+                    cardObject.transform.SetParent(null);
+                    cardObject.transform.position = slot.position;
+                    cardObject.transform.rotation = Quaternion.Euler(0, 180f, 0);
+
+                    Debug.Log($"(Server) Assigned card to slot: {slot.name}");
+                }
+            }
+
+            VisualizeServerDealtCardsClientRpc(playerNetwork);
+        }
+    }
+
+    [ClientRpc]
+    private void VisualizeServerDealtCardsClientRpc(NetworkObjectReference playerNetwork)
+    {
+        if(playerNetwork.TryGet(out NetworkObject playerObject))
+        {
+            PlayerController playerModel = playerObject.gameObject.GetComponent<PlayerController>();
+            for (int i = 0; i < playerModel.cardsInHand.Count; i++)
+            {
+                GameObject cardObject = playerModel.cardsInHand[i].gameObject;
+                Transform slot = playerModel.cardSlots[i];
+
+                cardObject.transform.SetParent(null);
+                cardObject.transform.position = slot.position;
+                cardObject.transform.rotation = Quaternion.Euler(0, 180f, 0);
+
+                Debug.Log($"(Client) Assigned card to slot: {slot.name}");
+            }
+        }
+    }
+
+    /*[ClientRpc]
+    private void DealSingleCardToPlayerClientRpc(NetworkObjectReference playerNetwork, NetworkObjectReference cardNetwork)
+    {
+        if(playerNetwork.TryGet(out NetworkObject playerObject) && cardNetwork.TryGet(out NetworkObject cardObject))
+        {
+            PlayerController playerModel = playerObject.gameObject.GetComponent<PlayerController>();
+            CardModel cardModel = cardObject.gameObject.GetComponent<CardModel>();
+
+            playerModel.cardsInHand.Add(cardModel);
+
+            int position = 0;
+            if (cardModel == playerModel.cardsInHand[1])
+                position = 1;
+
+            cardObject.transform.SetParent(null);
+            cardObject.transform.position = playerModel.cardSlots[position].position;
+            cardObject.transform.rotation = Quaternion.Euler(0, 180f, 0);
+
+            Debug.Log("Something!");
+        }
+    }
 
     private void DealCardsToPlayer(PlayerController playerModel)
     {
@@ -118,7 +193,7 @@ public class RoundModel : NetworkBehaviour
                 }
             }
         }
-    }
+    }*/
 
 
 
@@ -127,7 +202,8 @@ public class RoundModel : NetworkBehaviour
         // Deal cards to all players at the start of the round
         foreach (PlayerController playerModel in playerModels)
         {
-            DealCardsToPlayer(playerModel);
+            if(playerModel.IsSpawned)
+                DealCardsToPlayerServerRpc(new NetworkObjectReference(playerModel.GetComponent<NetworkObject>()));
         }
     }
 
