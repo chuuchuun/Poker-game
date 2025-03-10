@@ -32,6 +32,9 @@ public class PlayerController : NetworkBehaviour
     public TMP_Text reraiseText;
 
 
+    private bool isRoundStarted = false;
+
+
     public override void OnNetworkSpawn()
     {
         if (!IsOwner)
@@ -122,6 +125,13 @@ public class PlayerController : NetworkBehaviour
                 currentBalance -= newBet;
                 break;
 
+            case BetAction.start:
+                if (IsHost && !isRoundStarted)
+                {
+                    FindObjectsOfType<RoundModel>()[0].StartRound();
+                    isRoundStarted = true;
+                }
+                break;
             default:
                 Debug.LogError("Invalid action.");
                 break;
@@ -351,6 +361,14 @@ public class PlayerController : NetworkBehaviour
     getAvailableActions();
 }
 
+
+    public void OnStart(InputAction.CallbackContext context)
+    {
+        if(context.performed)
+        {
+            Act(BetAction.start);
+        }
+    }
 
 
 

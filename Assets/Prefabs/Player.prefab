@@ -9715,7 +9715,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 3536297955
+  GlobalObjectIdHash: 3749809545
   InScenePlacedSourceGlobalObjectIdHash: 3749809545
   AlwaysReplicateAsRoot: 1
   SynchronizeTransform: 1
@@ -9898,6 +9898,22 @@ MonoBehaviour:
       m_Calls: []
     m_ActionId: 0e5fcded-b5e1-41c6-a468-51002f4827b4
     m_ActionName: Player/Exit[/Keyboard/escape]
+  - m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 796040663478448977}
+        m_TargetAssemblyTypeName: PlayerController, Assembly-CSharp
+        m_MethodName: OnStart
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
+    m_ActionId: ccb105f9-faac-40bc-b602-7b44fe084472
+    m_ActionName: Player/Start[/Keyboard/space]
   m_NeverAutoSwitchControlSchemes: 0
   m_DefaultControlScheme: Keyboard&Mouse
   m_DefaultActionMap: Player
