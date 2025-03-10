@@ -273,6 +273,8 @@ public class RoundModel : NetworkBehaviour
             Debug.Log(playerModel.cardsInHand.Count);
             GameObject cardModel = cardObject.gameObject;
 
+            deck.Remove(cardModel.GetComponent<CardModel>());
+
             playerModel.cardsInHand.Add(cardModel.GetComponent<CardModel>());
             
 
