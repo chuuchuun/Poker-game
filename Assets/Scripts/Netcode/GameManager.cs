@@ -29,6 +29,7 @@ public class GameManager : NetworkBehaviour
         // Register callbacks manually
         NetworkManager.Singleton.OnServerStarted += OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
     
         Debug.Log("Callbacks manually registered.");
     
@@ -39,6 +40,7 @@ public class GameManager : NetworkBehaviour
         // Unregister callbacks when the object is destroyed
         NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
 
         Debug.Log("Callbacks manually unregistered.");
 
@@ -67,16 +69,34 @@ public class GameManager : NetworkBehaviour
     {
         if (!playerSpawnIndices.ContainsKey(clientId))
         {
-            int availableIndex = playerSpawnIndices.Count;
-            if (availableIndex < spawnPoints.Length)
+            if (playerSpawnIndices.Count < spawnPoints.Length)
             {
-                playerSpawnIndices[clientId] = availableIndex;
-                SpawnPlayer(clientId, availableIndex);
+                for (int availableIndex = 0; availableIndex < spawnPoints.Length; availableIndex++)
+                {
+                    if (!playerSpawnIndices.ContainsValue(availableIndex))
+                    {
+                        playerSpawnIndices[clientId] = availableIndex;
+                        SpawnPlayer(clientId, availableIndex);
+                        break;
+                    }
+                }
             }
             else
             {
                 Debug.LogWarning("Not enough spawn points!");
             }
+        }
+    }
+
+    private void ResetSpawnPoint(ulong clientId)
+    {
+        if (playerSpawnIndices.ContainsKey(clientId))
+        {
+            playerSpawnIndices.Remove(clientId);
+        }
+        else
+        {
+            Debug.Log("The spawning point of disconnected player wasn't cleared!");
         }
     }
 
@@ -99,5 +119,11 @@ public class GameManager : NetworkBehaviour
     {
         Debug.Log($"Client {clientId} connected");
         AssignSpawnPoint(clientId);
+    }
+
+    private void OnClientDisconnected(ulong clientId)
+    {
+        Debug.Log($"Client {clientId} disconnected");
+        ResetSpawnPoint(clientId);
     }
 }

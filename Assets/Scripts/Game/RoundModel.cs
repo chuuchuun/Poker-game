@@ -271,21 +271,24 @@ public class RoundModel : NetworkBehaviour
         {
             PlayerController playerModel = playerObject.gameObject.GetComponent<PlayerController>();
             Debug.Log(playerModel.cardsInHand.Count);
-            GameObject cardModel = cardObject.gameObject;
+            if (playerModel.cardsInHand.Count < 2)
+            {
+                GameObject cardModel = cardObject.gameObject;
 
-            deck.Remove(cardModel.GetComponent<CardModel>());
+                deck.Remove(cardModel.GetComponent<CardModel>());
 
-            playerModel.cardsInHand.Add(cardModel.GetComponent<CardModel>());
-            
+                playerModel.cardsInHand.Add(cardModel.GetComponent<CardModel>());
 
-            //GameObject cardObject = playerModel.cardsInHand[i].gameObject;
-            Transform slot = playerModel.cardSlots[playerModel.cardsInHand.Count - 1];
 
-            cardModel.transform.SetParent(null);
-            cardModel.transform.position = slot.position;
-            cardModel.transform.rotation = Quaternion.Euler(0, 180f, 0);
+                //GameObject cardObject = playerModel.cardsInHand[i].gameObject;
+                Transform slot = playerModel.cardSlots[playerModel.cardsInHand.Count - 1];
 
-            Debug.Log($"(Client) Assigned card to slot: {slot.name}");
+                cardModel.transform.SetParent(null);
+                cardModel.transform.position = slot.position;
+                cardModel.transform.rotation = Quaternion.Euler(0, 180f, 0);
+
+                Debug.Log($"(Client) Assigned card to slot: {slot.name}");
+            }
         }
     }
 
