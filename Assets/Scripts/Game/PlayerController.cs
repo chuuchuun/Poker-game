@@ -33,6 +33,7 @@ public class PlayerController : NetworkBehaviour
 
 
     private bool isRoundStarted = false;
+    private int spawnIndex = -1;
 
 
     public override void OnNetworkSpawn()
@@ -41,6 +42,16 @@ public class PlayerController : NetworkBehaviour
         {
             gameObject.SetActive(true); // Make sure the model is visible to others
         }
+    }
+
+    public void SetSpawnIndex(int index)
+    {
+        this.spawnIndex = index;
+    }
+
+    public int GetSpawnIndex()
+    {
+        return this.spawnIndex;
     }
 
     public List<BetAction> getAvailableActions()

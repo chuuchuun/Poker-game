@@ -11,6 +11,7 @@ TagManager:
   - check_text
   - raise_text
   - reraise_text
+  - fold_slot
   layers:
   - Default
   - TransparentFX

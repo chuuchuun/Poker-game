@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
+using System.Data;
 
 public class GameManager : NetworkBehaviour
 {
@@ -106,7 +107,24 @@ public class GameManager : NetworkBehaviour
         GameObject player = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);
         player.GetComponent<NetworkObject>().SpawnAsPlayerObject(clientId);
 
+        player.GetComponent<PlayerController>().SetSpawnIndex(spawnIndex);
+
         Debug.Log($"Spawning player {clientId} at {spawnPoint.position}");
+    }
+
+    private void ClearHand(ulong clientId)
+    {
+        NetworkObject playerNetworkObject = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(clientId);
+        PlayerController playerController = playerNetworkObject.GetComponent<PlayerController>();
+
+        if (playerController != null)
+        {
+            GameManager.FindObjectsOfType<RoundModel>()[0].BackToDeckServerRpc(new NetworkObjectReference(playerNetworkObject));
+        }
+        else
+        {
+            Debug.Log("Cannot return cards to the deck!");
+        }
     }
 
     private void OnServerStarted()
@@ -124,6 +142,7 @@ public class GameManager : NetworkBehaviour
     private void OnClientDisconnected(ulong clientId)
     {
         Debug.Log($"Client {clientId} disconnected");
+        ClearHand(clientId);
         ResetSpawnPoint(clientId);
     }
 }
