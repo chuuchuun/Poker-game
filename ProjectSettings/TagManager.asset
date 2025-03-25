@@ -6,6 +6,12 @@ TagManager:
   tags:
   - slot
   - chip
+  - call_text
+  - fold_text
+  - check_text
+  - raise_text
+  - reraise_text
+  - fold_slot
   layers:
   - Default
   - TransparentFX
