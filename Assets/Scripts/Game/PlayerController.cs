@@ -34,6 +34,8 @@ public class PlayerController : NetworkBehaviour
 
     private bool isRoundStarted = false;
     private int spawnIndex = -1;
+    public NetworkVariable<bool> isMyTurn = new NetworkVariable<bool>();
+
 
 
     public override void OnNetworkSpawn()
@@ -139,14 +141,16 @@ public class PlayerController : NetworkBehaviour
             case BetAction.start:
                 if (IsHost && !isRoundStarted)
                 {
-                    FindObjectsOfType<RoundModel>()[0].StartRound();
+                    FindObjectsOfType<RoundModel>()[0].StartGame();
                     isRoundStarted = true;
+                    
                 }
                 break;
             default:
                 Debug.LogError("Invalid action.");
                 break;
         }
+        FindObjectsOfType<RoundModel>()[0].NextRound();
     }
 
     void RemoveChip(int bet)
@@ -283,6 +287,13 @@ public class PlayerController : NetworkBehaviour
 
         PopulateChipsList();
     }
+    public void SetMyTurn(bool _isMyTurn)
+    {
+        if (IsServer)  // Only set this on the server side
+        {
+            isMyTurn.Value = _isMyTurn;
+        }
+    }
 
     void PopulateChipsList()
     {
@@ -367,10 +378,13 @@ public class PlayerController : NetworkBehaviour
     }
 
     void Update()
-{
-
-    getAvailableActions();
-}
+    {
+        Debug.Log(isMyTurn.Value);
+        if (isRoundStarted && isMyTurn.Value)
+        {
+            getAvailableActions();
+        }
+    }
 
 
     public void OnStart(InputAction.CallbackContext context)
