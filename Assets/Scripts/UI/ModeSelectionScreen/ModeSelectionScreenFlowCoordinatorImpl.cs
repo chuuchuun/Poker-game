@@ -5,7 +5,6 @@ public class ModeSelectionScreenFlowCoordinatorImpl : ModeSelectionScreenFlowCoo
 {
     public void MultiplayerMode() {
         Debug.Log("Multiplayer mode start");
-        SceneManager.LoadScene("MuliplayerScreen");
     }
 
     public void SingleplayerMode()

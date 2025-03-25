@@ -3,12 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
-using Unity.Netcode;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : NetworkBehaviour
+public class PlayerController : MonoBehaviour
 {
     private string userID;
     private PlayerInput input;
@@ -25,38 +24,15 @@ public class PlayerController : NetworkBehaviour
     public List<Transform> cardSlots;
     
 
-    private TMP_Text callText;
+    public TMP_Text callText;
     public TMP_Text checkText;
     public TMP_Text foldText;
     public TMP_Text raiseText;
     public TMP_Text reraiseText;
 
 
-    private bool isRoundStarted = false;
-    private int spawnIndex = -1;
-
-
-    public override void OnNetworkSpawn()
-    {
-        if (!IsOwner)
-        {
-            gameObject.SetActive(true); // Make sure the model is visible to others
-        }
-    }
-
-    public void SetSpawnIndex(int index)
-    {
-        this.spawnIndex = index;
-    }
-
-    public int GetSpawnIndex()
-    {
-        return this.spawnIndex;
-    }
-
     public List<BetAction> getAvailableActions()
     {
-        ResetActionText();
         List<BetAction> availableActions = new List<BetAction>
         {
             BetAction.check,
@@ -68,11 +44,6 @@ public class PlayerController : NetworkBehaviour
         {
             availableActions.Add(BetAction.raise);
             availableActions.Add(BetAction.reRaise);
-        }
-        else
-        {
-            availableActions.Remove(BetAction.raise);
-            availableActions.Remove(BetAction.reRaise);
         }
         foreach (BetAction action in availableActions)
         {
@@ -136,13 +107,6 @@ public class PlayerController : NetworkBehaviour
                 currentBalance -= newBet;
                 break;
 
-            case BetAction.start:
-                if (IsHost && !isRoundStarted)
-                {
-                    FindObjectsOfType<RoundModel>()[0].StartRound();
-                    isRoundStarted = true;
-                }
-                break;
             default:
                 Debug.LogError("Invalid action.");
                 break;
@@ -223,54 +187,14 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
-    void PopulateActionTexts()
-    {
-        List<TMP_Text> texts = FindObjectsOfType<TMP_Text>().ToList();
-        foreach (TMP_Text text in texts)
-        {
-            switch (text.tag)
-            {
-                case "call_text":
-                    callText = text;
-                    break;
-                case "check_text":
-                    checkText = text;
-                    break;
-                case "fold_text":
-                    foldText = text;
-                    break;
-                case "raise_text":
-                    raiseText = text;
-                    break;
-                case "reraise_text":
-                    reraiseText = text;
-                    break;
-            }
-        }
-        ResetActionText();
-        
-    }
-
-    void ResetActionText()
+    private void Awake()
     {
         callText.enabled = false;
         checkText.enabled = false;
         foldText.enabled = false;
         raiseText.enabled = false;
         reraiseText.enabled = false;
-    }
-    private void Awake()
-    {
-        List<Transform> children = gameObject.GetComponentsInChildren<Transform>().ToList();
-        foreach(Transform transform in children)
-        {
-            if (transform.CompareTag("slot"))
-            {
-                cardSlots.Add(transform);
-                Debug.Log($"aDDED CARD SLOT {transform.name}");
-            }
-        }
-       PopulateActionTexts();
+
         input = GetComponent<PlayerInput>();
         if (input != null)
         {
@@ -367,18 +291,26 @@ public class PlayerController : NetworkBehaviour
     }
 
     void Update()
-{
-
-    getAvailableActions();
-}
-
-
-    public void OnStart(InputAction.CallbackContext context)
     {
-        if(context.performed)
+        foreach (CardModel card in cardsInHand)
         {
-            Act(BetAction.start);
+            GameObject cardObject = card.gameObject;
+            foreach (Transform slot in cardSlots)
+            {
+                if (slot.childCount == 0)
+                {
+                    cardObject.transform.Rotate(30f, 180f, 0);
+                    cardObject.transform.SetParent(slot);
+                    cardObject.transform.localPosition = Vector3.zero;
+                    Debug.Log("Assigned card to slot: " + slot.name);
+                    break;
+                }
+            }
         }
+
+        getAvailableActions();
+
+
     }
 
 
