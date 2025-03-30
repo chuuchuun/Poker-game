@@ -9,5 +9,6 @@ public enum BetAction
     fold,
     call,
     raise,
-    reRaise
+    reRaise,
+    start
 }
