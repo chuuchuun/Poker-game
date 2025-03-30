@@ -179,7 +179,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Multiplayer
+  m_text: Create game
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 6a2ad06c3952eac4095e91ea1792e052, type: 2}
   m_sharedMaterial: {fileID: 2974998009210535788, guid: 6a2ad06c3952eac4095e91ea1792e052, type: 2}
@@ -293,7 +293,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: -60}
-  m_SizeDelta: {x: 170, y: 30}
+  m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &296496951
 MonoBehaviour:
@@ -340,8 +340,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 372680472}
-        m_TargetAssemblyTypeName: ModeSelectionScreen, Assembly-CSharp
-        m_MethodName: BackToMainMenu
+        m_TargetAssemblyTypeName: MultiplayerScreen, Assembly-CSharp
+        m_MethodName: BackToModeSelection
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -504,7 +504,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 372680466}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0fb9ab27578e31f489102f8e20885191, type: 3}
+  m_Script: {fileID: 11500000, guid: a589cec057fcda241ab0ba22035b1571, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!1 &543646186
@@ -612,7 +612,7 @@ GameObject:
   - component: {fileID: 817149174}
   - component: {fileID: 817149173}
   m_Layer: 5
-  m_Name: SingleplayerButton
+  m_Name: JoinButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -636,7 +636,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 170, y: 30}
+  m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &817149173
 MonoBehaviour:
@@ -683,8 +683,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 372680472}
-        m_TargetAssemblyTypeName: ModeSelectionScreen, Assembly-CSharp
-        m_MethodName: SingleplayerMode
+        m_TargetAssemblyTypeName: MultiplayerScreen, Assembly-CSharp
+        m_MethodName: JoinGame
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -923,7 +923,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Singleplayer
+  m_text: Join game
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 6a2ad06c3952eac4095e91ea1792e052, type: 2}
   m_sharedMaterial: {fileID: 2974998009210535788, guid: 6a2ad06c3952eac4095e91ea1792e052, type: 2}
@@ -1437,7 +1437,7 @@ GameObject:
   - component: {fileID: 2051920504}
   - component: {fileID: 2051920503}
   m_Layer: 5
-  m_Name: MultiplayerButton
+  m_Name: CreateButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1461,7 +1461,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 60}
-  m_SizeDelta: {x: 170, y: 30}
+  m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2051920503
 MonoBehaviour:
@@ -1508,8 +1508,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 372680472}
-        m_TargetAssemblyTypeName: ModeSelectionScreen, Assembly-CSharp
-        m_MethodName: MuliplayerMode
+        m_TargetAssemblyTypeName: MultiplayerScreen, Assembly-CSharp
+        m_MethodName: CreateGame
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
