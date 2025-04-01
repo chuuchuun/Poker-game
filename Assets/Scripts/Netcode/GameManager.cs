@@ -11,9 +11,11 @@ public class GameManager : NetworkBehaviour
     public Transform[] spawnPoints;
 
     private Dictionary<ulong, int> playerSpawnIndices = new Dictionary<ulong, int>();
+    private LobbyController lobbyController;
 
     private void Awake()
     {
+        lobbyController = GetComponent<LobbyController>();
         if (Instance == null)
         {
             Instance = this;
@@ -27,43 +29,35 @@ public class GameManager : NetworkBehaviour
 
     private void Start()
     {
-        // Register callbacks manually
         NetworkManager.Singleton.OnServerStarted += OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
-    
-        Debug.Log("Callbacks manually registered.");
-    
     }
 
     override public void OnDestroy()
     {
-        // Unregister callbacks when the object is destroyed
         NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
-
-        Debug.Log("Callbacks manually unregistered.");
-
     }
 
     public void StartHost()
     {
         NetworkManager.Singleton.StartHost();
-        Debug.Log("Hosting the game...");
         StartCoroutine(DelayedSpawnHost());
     }
 
     private IEnumerator DelayedSpawnHost()
     {
         yield return new WaitForSeconds(0.5f);
-        AssignSpawnPoint(NetworkManager.Singleton.LocalClientId);
+        ulong userID = NetworkManager.Singleton.LocalClientId;
+        AssignSpawnPoint(userID);
+        lobbyController.ConnectPlayer(userID);
     }
 
     public void JoinGame()
     {
         NetworkManager.Singleton.StartClient();
-        Debug.Log("Joining the game...");
     }
 
     private void AssignSpawnPoint(ulong clientId)
@@ -82,10 +76,6 @@ public class GameManager : NetworkBehaviour
                     }
                 }
             }
-            else
-            {
-                Debug.LogWarning("Not enough spawn points!");
-            }
         }
     }
 
@@ -95,10 +85,6 @@ public class GameManager : NetworkBehaviour
         {
             playerSpawnIndices.Remove(clientId);
         }
-        else
-        {
-            Debug.Log("The spawning point of disconnected player wasn't cleared!");
-        }
     }
 
     private void SpawnPlayer(ulong clientId, int spawnIndex)
@@ -106,10 +92,7 @@ public class GameManager : NetworkBehaviour
         Transform spawnPoint = spawnPoints[spawnIndex];
         GameObject player = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);
         player.GetComponent<NetworkObject>().SpawnAsPlayerObject(clientId);
-
         player.GetComponent<PlayerController>().SetSpawnIndex(spawnIndex);
-
-        Debug.Log($"Spawning player {clientId} at {spawnPoint.position}");
     }
 
     private void ClearHand(ulong clientId)
@@ -121,27 +104,21 @@ public class GameManager : NetworkBehaviour
         {
             GameManager.FindObjectsOfType<RoundModel>()[0].BackToDeckServerRpc(new NetworkObjectReference(playerNetworkObject));
         }
-        else
-        {
-            Debug.Log("Cannot return cards to the deck!");
-        }
     }
 
     private void OnServerStarted()
     {
-        Debug.Log("Server Started...");
         AssignSpawnPoint(NetworkManager.Singleton.LocalClientId);
     }
 
     private void OnClientConnected(ulong clientId)
     {
-        Debug.Log($"Client {clientId} connected");
+        lobbyController.ConnectPlayer(clientId);
         AssignSpawnPoint(clientId);
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
-        Debug.Log($"Client {clientId} disconnected");
         ClearHand(clientId);
         ResetSpawnPoint(clientId);
     }
