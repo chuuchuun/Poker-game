@@ -34,18 +34,29 @@ public class PlayerController : NetworkBehaviour
 
 
     private bool isRoundStarted = false;
-    private int spawnIndex = -1;
-    public bool isMyTurn = false;
+
+    private NetworkVariable<int> _spawnIndex = new NetworkVariable<int>(-1);
+    public int SpawnIndex => _spawnIndex.Value;
+
+    // Replace isMyTurn with computed property
+    public bool IsMyTurn => roundModel != null &&
+                          roundModel.currentPlayerIndex.Value == _spawnIndex.Value;
 
 
     public int GetSpawnIndex()
     {
-        return this.spawnIndex;
+        return SpawnIndex;
     }
 
+    public void SetSpawnIndex(int index)
+    {
+        if (!IsServer) return; 
+        _spawnIndex.Value = index;
+        Debug.Log($"Spawn index set to {index} for player {OwnerClientId}");
+    }
     public List<BetAction> getAvailableActions()
     {
-        //Debug.Log($"Trying to get available actions for player {this.spawnIndex}");
+        Debug.Log($"Trying to get available actions for player {SpawnIndex}");
         ResetActionText();
         List<BetAction> availableActions = new List<BetAction>
         {
@@ -97,51 +108,105 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (!IsOwner)
+        if (!IsOwner) return;
+
+        // Initialize roundModel reference securely
+        StartCoroutine(WaitForRoundModelInitialization());
+    }
+
+    private IEnumerator WaitForRoundModelInitialization()
+    {
+        while (roundModel == null)
         {
-            gameObject.SetActive(true);
+            roundModel = FindObjectOfType<RoundModel>();
+            yield return null;
         }
 
         if (IsServer)
         {
-            spawnIndex = (int)OwnerClientId;
+            _spawnIndex.Value = NetworkManager.Singleton.ConnectedClientsList.Count - 1;
+            Debug.Log($"Server assigned spawn index: {_spawnIndex.Value}");
         }
-        roundModel.currentPlayerIndex.OnValueChanged += (oldValue, newValue) => UpdateTurnState();
-        UpdateTurnState();
+
+        SetupNetworkVariableCallbacks();
     }
 
-    public void SetSpawnIndex(int index)
+    private void SetupNetworkVariableCallbacks()
     {
-        this.spawnIndex = index;
+        _spawnIndex.OnValueChanged += (oldVal, newVal) =>
+        {
+            Debug.Log($"SpawnIndex updated from {oldVal} to {newVal}");
+            UpdateTurnState();
+        };
+
+        roundModel.currentPlayerIndex.OnValueChanged += (oldVal, newVal) =>
+        {
+            Debug.Log($"CurrentPlayerIndex updated from {oldVal} to {newVal}");
+            UpdateTurnState();
+        };
+    }
+
+    [ClientRpc]
+    public void UpdateSpawnIndexClientRpc(int index)
+    {
+        if (IsServer) // Only server can actually change the value
+        {
+            _spawnIndex.Value = index;
+        }
     }
 
     private void UpdateTurnState()
     {
-        bool isNowMyTurn = (roundModel.currentPlayerIndex.Value == spawnIndex);
-        isMyTurn = isNowMyTurn;
-        UpdateUIForTurnClientRpc(isNowMyTurn);
-    }
+        if (!IsOwner) return;
 
-    [ClientRpc]
-    public void UpdateUIForTurnClientRpc(bool isMyTurn)
-    {
-        Debug.Log($"Updating UI for Player {spawnIndex}. Is my turn? {isMyTurn}");
-        if (isMyTurn)
+        Debug.Log($"Turn check - PlayerIndex: {roundModel.currentPlayerIndex.Value}, MyIndex: {_spawnIndex.Value}");
+
+        if (IsMyTurn)
         {
-            getAvailableActions(); // Enable buttons
+            getAvailableActions();
         }
         else
         {
-            ResetActionText(); // Disable buttons
+            ResetActionText();
         }
     }
 
+
     public void Act(BetAction action, int newBet = 0)
     {
-        if (!isMyTurn && action != BetAction.start)
+        if (!IsOwner) return;
+
+        Debug.Log($"Attempting {action} - IsMyTurn: {IsMyTurn}, SpawnIndex: {SpawnIndex}");
+
+        if (!IsMyTurn && action != BetAction.start)
         {
-            Debug.Log($"Not turn of player {this.spawnIndex}");
-            return; // Ignore input if it's not this player's turn
+            Debug.LogWarning($"Client thinks it's not their turn! Current: {roundModel.currentPlayerIndex.Value}, Mine: {SpawnIndex}");
+            return;
+        }
+
+        if (action != BetAction.start)
+        {
+            ExecuteActionServerRpc(action, newBet);
+        }
+        else if (IsHost)
+        {
+            roundModel.StartGame();
+            roundModel.NextRound();
+            isRoundStarted = true;
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void ExecuteActionServerRpc(BetAction action, int newBet, ServerRpcParams rpcParams = default)
+    {
+        var senderClientId = rpcParams.Receive.SenderClientId;
+        var playerObject = NetworkManager.Singleton.ConnectedClients[senderClientId].PlayerObject;
+        var playerController = playerObject.GetComponent<PlayerController>();
+
+        if (roundModel.currentPlayerIndex.Value != playerController.SpawnIndex)
+        {
+            Debug.LogWarning($"Server rejected action - Not player's turn! Current: {roundModel.currentPlayerIndex.Value}, Theirs: {playerController.SpawnIndex}");
+            return;
         }
         switch (action)
         {
@@ -160,29 +225,11 @@ public class PlayerController : NetworkBehaviour
             case BetAction.reRaise:
                 Debug.Log($"Player re-raised {newBet}.");
                 break;
-            case BetAction.start:
-                if (IsHost && !isRoundStarted)
-                {
-                    roundModel.StartGame();
-                    isRoundStarted = true;
-                }
-                break;
             default:
                 Debug.LogError("Invalid action.");
                 return;
         }
-
-        ResetActionText();
-        StartCoroutine(AdvanceTurnWithDelay());
-    }
-
-    IEnumerator AdvanceTurnWithDelay()
-    {
-        yield return new WaitForSeconds(2);
-        if (IsServer)
-        {
-            roundModel.NextRound(); // Server moves turn to the next player
-        }
+        roundModel.NextRound();
     }
 
     void RemoveChip(int bet)
@@ -284,7 +331,6 @@ public class PlayerController : NetworkBehaviour
             }
         }
         ResetActionText();
-        
     }
 
     void ResetActionText()
@@ -406,23 +452,19 @@ public class PlayerController : NetworkBehaviour
 
     void Update()
     {
-        //Debug.Log($"{this.spawnIndex} is {isMyTurn}");
-
-        if (isRoundStarted)
-        {
-            // Show action texts only if it's the player's turn
-            if (this.isMyTurn)
-            {
-                getAvailableActions();
-            }
-            else
-            {
-                ResetActionText();
-            }
+        if (IsOwner) {
+            //Debug.Log($"My spawn index is {SpawnIndex} and my turn is {IsMyTurn}");
         }
+        //if (isRoundStarted)
+        //{
+            //bool isNowMyTurn = (roundModel.currentPlayerIndex.Value == spawnIndex.Value);
+            //if (isMyTurn != isNowMyTurn)
+            //{
+              //  isMyTurn = isNowMyTurn;
+               // UpdateTurnState();
+            //}
+        //}
     }
-
-
 
 
     public void OnStart(InputAction.CallbackContext context)
@@ -433,14 +475,11 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
-
-
     public void OnCall(InputAction.CallbackContext context)
     {
-        if (context.performed)
-        {
-            Act(BetAction.call);
-        }
+        if (!context.performed || !IsOwner) return;
+        Debug.Log($"Call attempt - Valid: {IsMyTurn}, Index: {_spawnIndex.Value}");
+        Act(BetAction.call);
     }
 
     public void OnFold(InputAction.CallbackContext context)
