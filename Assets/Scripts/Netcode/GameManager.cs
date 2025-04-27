@@ -52,7 +52,6 @@ public class GameManager : NetworkBehaviour
         yield return new WaitForSeconds(0.5f);
         ulong userID = NetworkManager.Singleton.LocalClientId;
         AssignSpawnPoint(userID);
-        lobbyController.ConnectPlayer(userID);
     }
 
     public void JoinGame()
@@ -113,7 +112,6 @@ public class GameManager : NetworkBehaviour
 
     private void OnClientConnected(ulong clientId)
     {
-        lobbyController.ConnectPlayer(clientId);
         AssignSpawnPoint(clientId);
     }
 
