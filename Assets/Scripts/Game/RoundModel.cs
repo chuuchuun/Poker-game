@@ -21,20 +21,27 @@ public class RoundModel : NetworkBehaviour
     private Vector3 deckPosition;
 
     private PlayerController currentPlayer;
-    public NetworkVariable<int> currentPlayerIndex = new NetworkVariable<int>(-1);
+    private int currentPlayerIndex = 0;
 
     private void Awake()
     {
         InitializeDeckAndPlayers();
-       
+        foreach (PlayerController player in playerModels)
+        {
+            player.SetMyTurn(false);
+        }
     }
 
     private void Start()
     {
+    
+        //dealCards(); // Initial card dealing
+        //addCardOnTable(5); // Add cards to the table (flop, turn, river)
     }
 
     private void Update()
     {
+        //CheckAndDealCardsToNewPlayers();
     }
 
     public void StartGame()
@@ -45,12 +52,24 @@ public class RoundModel : NetworkBehaviour
 
     public void NextRound()
     {
-        if (!IsServer) return;
-        int nextIndex = (currentPlayerIndex.Value + 1) % NetworkManager.Singleton.ConnectedClientsList.Count + 1;
-        currentPlayerIndex.Value = nextIndex;
+        // Reset turn state for all players before assigning new turns
+        foreach (PlayerController player in playerModels)
+        {
+            player.SetMyTurn(false);
+        }
 
-        Debug.Log($"Next round started, new turn: Player {currentPlayerIndex.Value}");
+        // Update the current player and set their turn to true
+        currentPlayer = playerModels[currentPlayerIndex];
+        currentPlayer.SetMyTurn(true);
+
+        // Log the current player's turn
+        Debug.Log("It's now " + currentPlayerIndex+ "'s turn.");
+
+        // Update currentPlayerIndex with looping behavior
+        currentPlayerIndex = (currentPlayerIndex + 1) % playerModels.Count;
     }
+
+
 
     private void InitializeDeckAndPlayers()
     {
