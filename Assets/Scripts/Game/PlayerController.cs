@@ -10,7 +10,6 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : NetworkBehaviour
 {
-    private RoundModel roundModel;
     private string userID;
     private PlayerInput input;
     public List<ChipModel> totalChips = new List<ChipModel>();
@@ -35,8 +34,22 @@ public class PlayerController : NetworkBehaviour
 
     private bool isRoundStarted = false;
     private int spawnIndex = -1;
-    public bool isMyTurn = false;
+    public NetworkVariable<bool> isMyTurn = new NetworkVariable<bool>();
 
+
+
+    public override void OnNetworkSpawn()
+    {
+        if (!IsOwner)
+        {
+            gameObject.SetActive(true); // Make sure the model is visible to others
+        }
+    }
+
+    public void SetSpawnIndex(int index)
+    {
+        this.spawnIndex = index;
+    }
 
     public int GetSpawnIndex()
     {
@@ -45,7 +58,6 @@ public class PlayerController : NetworkBehaviour
 
     public List<BetAction> getAvailableActions()
     {
-        //Debug.Log($"Trying to get available actions for player {this.spawnIndex}");
         ResetActionText();
         List<BetAction> availableActions = new List<BetAction>
         {
@@ -95,94 +107,50 @@ public class PlayerController : NetworkBehaviour
         return availableActions;
     }
 
-    public override void OnNetworkSpawn()
-    {
-        if (!IsOwner)
-        {
-            gameObject.SetActive(true);
-        }
-
-        if (IsServer)
-        {
-            spawnIndex = (int)OwnerClientId;
-        }
-        roundModel.currentPlayerIndex.OnValueChanged += (oldValue, newValue) => UpdateTurnState();
-        UpdateTurnState();
-    }
-
-    public void SetSpawnIndex(int index)
-    {
-        this.spawnIndex = index;
-    }
-
-    private void UpdateTurnState()
-    {
-        bool isNowMyTurn = (roundModel.currentPlayerIndex.Value == spawnIndex);
-        isMyTurn = isNowMyTurn;
-        UpdateUIForTurnClientRpc(isNowMyTurn);
-    }
-
-    [ClientRpc]
-    public void UpdateUIForTurnClientRpc(bool isMyTurn)
-    {
-        Debug.Log($"Updating UI for Player {spawnIndex}. Is my turn? {isMyTurn}");
-        if (isMyTurn)
-        {
-            getAvailableActions(); // Enable buttons
-        }
-        else
-        {
-            ResetActionText(); // Disable buttons
-        }
-    }
 
     public void Act(BetAction action, int newBet = 0)
     {
-        if (!isMyTurn && action != BetAction.start)
-        {
-            Debug.Log($"Not turn of player {this.spawnIndex}");
-            return; // Ignore input if it's not this player's turn
-        }
         switch (action)
         {
             case BetAction.check:
                 Debug.Log("Player checked.");
                 break;
+
             case BetAction.fold:
                 Debug.Log("Player folded.");
                 break;
+
             case BetAction.call:
                 Debug.Log("Player called.");
+                currentBalance -= currentBet;
                 break;
+
             case BetAction.raise:
-                Debug.Log($"Player raised {newBet}.");
+                Debug.Log($"Player raised with a new bet of {newBet}.");
+                currentBet = newBet;
+                currentBalance -= newBet;
+                RemoveChip(newBet);
                 break;
+
             case BetAction.reRaise:
-                Debug.Log($"Player re-raised {newBet}.");
+                Debug.Log($"Player re-raised with a new bet of {newBet}.");
+                currentBet = newBet;
+                currentBalance -= newBet;
                 break;
+
             case BetAction.start:
                 if (IsHost && !isRoundStarted)
                 {
-                    roundModel.StartGame();
+                    FindObjectsOfType<RoundModel>()[0].StartGame();
                     isRoundStarted = true;
+                    
                 }
                 break;
             default:
                 Debug.LogError("Invalid action.");
-                return;
+                break;
         }
-
-        ResetActionText();
-        StartCoroutine(AdvanceTurnWithDelay());
-    }
-
-    IEnumerator AdvanceTurnWithDelay()
-    {
-        yield return new WaitForSeconds(2);
-        if (IsServer)
-        {
-            roundModel.NextRound(); // Server moves turn to the next player
-        }
+        FindObjectsOfType<RoundModel>()[0].NextRound();
     }
 
     void RemoveChip(int bet)
@@ -297,8 +265,6 @@ public class PlayerController : NetworkBehaviour
     }
     private void Awake()
     {
-        this.roundModel = FindObjectsOfType<RoundModel>()[0];
-
         List<Transform> children = gameObject.GetComponentsInChildren<Transform>().ToList();
         foreach(Transform transform in children)
         {
@@ -308,7 +274,7 @@ public class PlayerController : NetworkBehaviour
                 Debug.Log($"aDDED CARD SLOT {transform.name}");
             }
         }
-        PopulateActionTexts();
+       PopulateActionTexts();
         input = GetComponent<PlayerInput>();
         if (input != null)
         {
@@ -320,6 +286,13 @@ public class PlayerController : NetworkBehaviour
         }
 
         PopulateChipsList();
+    }
+    public void SetMyTurn(bool _isMyTurn)
+    {
+        if (IsServer)  // Only set this on the server side
+        {
+            isMyTurn.Value = _isMyTurn;
+        }
     }
 
     void PopulateChipsList()
@@ -406,28 +379,17 @@ public class PlayerController : NetworkBehaviour
 
     void Update()
     {
-        //Debug.Log($"{this.spawnIndex} is {isMyTurn}");
-
-        if (isRoundStarted)
+        Debug.Log(isMyTurn.Value);
+        if (isRoundStarted && isMyTurn.Value)
         {
-            // Show action texts only if it's the player's turn
-            if (this.isMyTurn)
-            {
-                getAvailableActions();
-            }
-            else
-            {
-                ResetActionText();
-            }
+            getAvailableActions();
         }
     }
 
 
-
-
     public void OnStart(InputAction.CallbackContext context)
     {
-        if (context.performed)
+        if(context.performed)
         {
             Act(BetAction.start);
         }
