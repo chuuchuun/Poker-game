@@ -43,15 +43,14 @@ public class RoundModel : NetworkBehaviour
         addCardOnTableServerRpc(2);
     }
 
-public void NextRound()
-{
-    if (!IsServer) return;
-    int nextIndex = (currentPlayerIndex.Value + 1) % NetworkManager.Singleton.ConnectedClientsList.Count;
-    currentPlayerIndex.Value = nextIndex;
+    public void NextRound()
+    {
+        if (!IsServer) return;
+        int nextIndex = (currentPlayerIndex.Value + 1) % NetworkManager.Singleton.ConnectedClientsList.Count + 1;
+        currentPlayerIndex.Value = nextIndex;
 
-    Debug.Log($"Next round started, new turn: Player {currentPlayerIndex.Value}");
-}
-
+        Debug.Log($"Next round started, new turn: Player {currentPlayerIndex.Value}");
+    }
 
     private void InitializeDeckAndPlayers()
     {

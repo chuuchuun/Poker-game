@@ -27,29 +27,37 @@ public class GameManager : NetworkBehaviour
 
     private void Start()
     {
+        // Register callbacks manually
         NetworkManager.Singleton.OnServerStarted += OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+    
+        Debug.Log("Callbacks manually registered.");
+    
     }
 
     override public void OnDestroy()
     {
+        // Unregister callbacks when the object is destroyed
         NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
+
+        Debug.Log("Callbacks manually unregistered.");
+
     }
 
     public void StartHost()
     {
         NetworkManager.Singleton.StartHost();
         Debug.Log("Hosting the game...");
-        AssignSpawnPoint(NetworkManager.Singleton.LocalClientId);
+        StartCoroutine(DelayedSpawnHost());
     }
 
     private IEnumerator DelayedSpawnHost()
     {
         yield return new WaitForSeconds(0.5f);
-        
+        AssignSpawnPoint(NetworkManager.Singleton.LocalClientId);
     }
 
     public void JoinGame()
