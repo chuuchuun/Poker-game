@@ -375,8 +375,16 @@ public class PlayerController : NetworkBehaviour
 
     public void OnStart(InputAction.CallbackContext context)
     {
-        if(context.performed)
+        if (context.performed)
         {
+            LobbyController lobbyController = FindObjectOfType<LobbyController>();
+            if (lobbyController != null && !lobbyController.HasStartedGame())
+            {
+                ulong userID = NetworkManager.Singleton.LocalClientId;
+                lobbyController.ToggleReadiness();
+                return;
+            }
+
             Act(BetAction.start);
         }
     }
