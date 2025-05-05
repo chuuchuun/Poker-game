@@ -20,13 +20,21 @@ public class RoundModel : NetworkBehaviour
     private List<int> playerSpawns = new List<int>();
     private Vector3 deckPosition;
 
+    private PlayerController currentPlayer;
+    private int currentPlayerIndex = 0;
+
     private void Awake()
     {
         InitializeDeckAndPlayers();
+        foreach (PlayerController player in playerModels)
+        {
+            player.SetMyTurn(false);
+        }
     }
 
     private void Start()
     {
+    
         //dealCards(); // Initial card dealing
         //addCardOnTable(5); // Add cards to the table (flop, turn, river)
     }
@@ -36,11 +44,32 @@ public class RoundModel : NetworkBehaviour
         //CheckAndDealCardsToNewPlayers();
     }
 
-    public void StartRound()
+    public void StartGame()
     {
-        dealCards(); // Initial card dealing
-        addCardOnTableServerRpc(2); // Add cards to the table (flop, turn, river)
+        dealCards();
+        addCardOnTableServerRpc(2);
     }
+
+    public void NextRound()
+    {
+        // Reset turn state for all players before assigning new turns
+        foreach (PlayerController player in playerModels)
+        {
+            player.SetMyTurn(false);
+        }
+
+        // Update the current player and set their turn to true
+        currentPlayer = playerModels[currentPlayerIndex];
+        currentPlayer.SetMyTurn(true);
+
+        // Log the current player's turn
+        Debug.Log("It's now " + currentPlayerIndex+ "'s turn.");
+
+        // Update currentPlayerIndex with looping behavior
+        currentPlayerIndex = (currentPlayerIndex + 1) % playerModels.Count;
+    }
+
+
 
     private void InitializeDeckAndPlayers()
     {
@@ -49,7 +78,6 @@ public class RoundModel : NetworkBehaviour
         {
             deck.Add(card);
         }
-        deckPosition = allCards[0].transform.position;
 
         PlayerController[] allPlayers = FindObjectsOfType<PlayerController>();
         foreach (PlayerController player in allPlayers)
@@ -58,7 +86,6 @@ public class RoundModel : NetworkBehaviour
             {
                 playerModels.Add(player);
                 Debug.Log("New player added: " + player.name);
-                // Optionally deal cards immediately to the new player here
             }
         }
 
@@ -67,7 +94,6 @@ public class RoundModel : NetworkBehaviour
             if (child.CompareTag("slot"))
             {
                 cardSlots.Add(child);
-                //Debug.Log("Slot found: " + child.name);
             }
             else if (child.CompareTag("fold_slot"))
             {
@@ -75,6 +101,7 @@ public class RoundModel : NetworkBehaviour
             }
         }
     }
+
     public void dealCards()
     {
         PlayerController[] allPlayers = FindObjectsOfType<PlayerController>();

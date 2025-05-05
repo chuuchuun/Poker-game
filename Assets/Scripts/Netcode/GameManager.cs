@@ -88,10 +88,24 @@ public class GameManager : NetworkBehaviour
 
     private void SpawnPlayer(ulong clientId, int spawnIndex)
     {
+        if (!IsServer) return; // Ensure only the server runs this
+
         Transform spawnPoint = spawnPoints[spawnIndex];
         GameObject player = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);
         player.GetComponent<NetworkObject>().SpawnAsPlayerObject(clientId);
         player.GetComponent<PlayerController>().SetSpawnIndex(spawnIndex);
+    }
+
+
+    [ClientRpc]
+    private void UpdateClientPositionClientRpc(ulong clientId, Vector3 position)
+    {
+        if (NetworkManager.Singleton.LocalClientId == clientId)
+        {
+            GameObject player = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(clientId).gameObject;
+            player.transform.position = position;
+            Debug.Log($"Client {clientId} position updated to {position}");
+        }
     }
 
     private void ClearHand(ulong clientId)
