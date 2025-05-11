@@ -32,22 +32,15 @@ public class RoundModel : NetworkBehaviour
         }
     }
 
-    private void Start()
-    {
-    
-        //dealCards(); // Initial card dealing
-        //addCardOnTable(5); // Add cards to the table (flop, turn, river)
-    }
-
     private void Update()
     {
         //CheckAndDealCardsToNewPlayers();
     }
 
-    public void StartGame()
+    public void StartGame(ulong firstPlayerId)
     {
         dealCards();
-        addCardOnTableServerRpc(2);
+        Debug.Log("Everything works as expected.");
     }
 
     public void NextRound()

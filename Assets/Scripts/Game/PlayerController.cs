@@ -139,18 +139,19 @@ public class PlayerController : NetworkBehaviour
                 break;
 
             case BetAction.start:
-                if (IsHost && !isRoundStarted)
+                LobbyController lobbyController = FindObjectOfType<LobbyController>();
+                MatchController matchController = FindObjectOfType<MatchController>();
+
+                if (!matchController.wasGameStarted)
                 {
-                    FindObjectsOfType<RoundModel>()[0].StartGame();
-                    isRoundStarted = true;
-                    
+                    lobbyController.ToggleReadiness();
                 }
                 break;
             default:
                 Debug.LogError("Invalid action.");
                 break;
+
         }
-        FindObjectsOfType<RoundModel>()[0].NextRound();
     }
 
     void RemoveChip(int bet)
@@ -379,7 +380,6 @@ public class PlayerController : NetworkBehaviour
 
     void Update()
     {
-        Debug.Log(isMyTurn.Value);
         if (isRoundStarted && isMyTurn.Value)
         {
             getAvailableActions();

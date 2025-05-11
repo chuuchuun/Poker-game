@@ -5,7 +5,6 @@ using UnityEngine;
 public class LobbyController : NetworkBehaviour
 {
     private NetworkList<PlayerReadinessState> readinessList = new NetworkList<PlayerReadinessState>();
-
     private NetworkVariable<bool> hasStartedGame = new NetworkVariable<bool>(false);
 
     public bool HasStartedGame()
@@ -19,8 +18,6 @@ public class LobbyController : NetworkBehaviour
         {
             NetworkManager.OnClientConnectedCallback += OnClientConnected;
         }
-
-        readinessList.OnListChanged += OnReadinessListChanged;
     }
 
     private void OnDestroy()
@@ -29,15 +26,11 @@ public class LobbyController : NetworkBehaviour
         {
             NetworkManager.OnClientConnectedCallback -= OnClientConnected;
         }
-
-        readinessList.OnListChanged -= OnReadinessListChanged;
     }
 
     private void OnClientConnected(ulong clientId)
     {
         if (!IsServer) return;
-
-        Debug.Log($"Client connected (lobby): {clientId}");
 
         readinessList.Add(new PlayerReadinessState(clientId, false));
     }
@@ -60,7 +53,6 @@ public class LobbyController : NetworkBehaviour
             {
                 bool newState = !readinessList[i].isReady;
                 readinessList[i] = new PlayerReadinessState(clientId, newState);
-                Debug.Log($"Player {clientId} readiness set to {newState}");
                 break;
             }
         }
@@ -78,19 +70,26 @@ public class LobbyController : NetworkBehaviour
                 return;
         }
 
-        Debug.Log("All players ready. Starting game...");
         hasStartedGame.Value = true;
         NotifyGameStartClientRpc();
     }
 
-    private void OnReadinessListChanged(NetworkListEvent<PlayerReadinessState> change)
+    private List<ulong> GetPlayerIdsList()
     {
-        Debug.Log($"Readiness list changed. Type: {change.Type}, Value: {change.Value.clientId} isReady: {change.Value.isReady}");
+        List<ulong> ids = new List<ulong>();
+
+        foreach (var player in readinessList)
+        {
+            ids.Add(player.clientId);
+        }
+
+        return ids;
     }
 
     [ClientRpc]
     private void NotifyGameStartClientRpc()
     {
-        Debug.Log("Game started!");
+        MatchController matchController = GetComponent<MatchController>();
+        matchController.StartGame(GetPlayerIdsList());
     }
 }
