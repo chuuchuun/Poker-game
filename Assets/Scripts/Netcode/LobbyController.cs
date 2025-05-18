@@ -20,7 +20,7 @@ public class LobbyController : NetworkBehaviour
         }
     }
 
-    private void OnDestroy()
+    public override void OnDestroy()
     {
         if (IsServer)
         {
@@ -45,6 +45,7 @@ public class LobbyController : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     private void RequestToggleReadinessServerRpc(ServerRpcParams rpcParams = default)
     {
+        if (hasStartedGame.Value) return;
         ulong clientId = rpcParams.Receive.SenderClientId;
 
         for (int i = 0; i < readinessList.Count; i++)
@@ -71,7 +72,8 @@ public class LobbyController : NetworkBehaviour
         }
 
         hasStartedGame.Value = true;
-        NotifyGameStartClientRpc();
+        MatchController matchController = GetComponent<MatchController>();
+        matchController.StartGame(GetPlayerIdsList());
     }
 
     private List<ulong> GetPlayerIdsList()
@@ -84,12 +86,5 @@ public class LobbyController : NetworkBehaviour
         }
 
         return ids;
-    }
-
-    [ClientRpc]
-    private void NotifyGameStartClientRpc()
-    {
-        MatchController matchController = GetComponent<MatchController>();
-        matchController.StartGame(GetPlayerIdsList());
     }
 }

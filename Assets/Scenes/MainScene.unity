@@ -1702,6 +1702,7 @@ GameObject:
   - component: {fileID: 345441755}
   - component: {fileID: 345441758}
   - component: {fileID: 345441759}
+  - component: {fileID: 345441760}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -1788,6 +1789,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b791f67c74e2f743a65ffe81bab5c16, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &345441760
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 345441753}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5021b1156171b194d854c5e610efd9f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cardsOnTable: []
+  minimalBet: 0
+  bettingController: {fileID: 0}
 --- !u!1001 &349256126
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2931,9 +2947,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 45e5feee4bbe39a4b8213a663713b102, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1496009208}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 45e5feee4bbe39a4b8213a663713b102, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1496009204}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 45e5feee4bbe39a4b8213a663713b102, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1496009206}
@@ -8587,21 +8600,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 45e5feee4bbe39a4b8213a663713b102, type: 3}
   m_PrefabInstance: {fileID: 610117147}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1496009204
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1496009203}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5021b1156171b194d854c5e610efd9f6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  cardsOnTable: []
-  minimalBet: 0
-  bettingController: {fileID: 0}
 --- !u!4 &1496009205 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 45e5feee4bbe39a4b8213a663713b102, type: 3}

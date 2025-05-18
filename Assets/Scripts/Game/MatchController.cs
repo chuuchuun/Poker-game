@@ -24,8 +24,8 @@ public class MatchController : NetworkBehaviour
 
     public void StartRound()
     {
-        RoundModel roundModel = gameObject.AddComponent<RoundModel>();
-        roundModel.StartGame(players[startingPlayer]);
+        RoundModel roundModel = gameObject.GetOrAddComponent<RoundModel>();
+        roundModel.StartGame(players.ToArray(), players[startingPlayer]);
     }
 
     public void RoundEnded()
