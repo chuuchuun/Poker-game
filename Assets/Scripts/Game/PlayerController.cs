@@ -10,7 +10,7 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : NetworkBehaviour
 {
-    private string userID;
+    private ulong userID;
     private PlayerInput input;
     public List<ChipModel> totalChips = new List<ChipModel>();
     
@@ -42,7 +42,7 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsOwner)
         {
-            gameObject.SetActive(true); // Make sure the model is visible to others
+            gameObject.SetActive(true);
         }
     }
 
@@ -110,47 +110,53 @@ public class PlayerController : NetworkBehaviour
 
     public void Act(BetAction action, int newBet = 0)
     {
+        IPlayerAction playerAction = null;
         switch (action)
         {
             case BetAction.check:
-                Debug.Log("Player checked.");
                 break;
 
             case BetAction.fold:
-                Debug.Log("Player folded.");
                 break;
 
             case BetAction.call:
-                Debug.Log("Player called.");
                 currentBalance -= currentBet;
                 break;
 
             case BetAction.raise:
-                Debug.Log($"Player raised with a new bet of {newBet}.");
                 currentBet = newBet;
                 currentBalance -= newBet;
                 RemoveChip(newBet);
                 break;
 
             case BetAction.reRaise:
-                Debug.Log($"Player re-raised with a new bet of {newBet}.");
                 currentBet = newBet;
                 currentBalance -= newBet;
                 break;
 
             case BetAction.start:
-                if (IsHost && !isRoundStarted)
+                MatchController matchController = FindObjectOfType<MatchController>();
+                playerAction = new SkipAction(0);
+
+                if (!matchController.wasGameStarted)
                 {
-                    FindObjectsOfType<RoundModel>()[0].StartGame();
-                    isRoundStarted = true;
-                    
+                    LobbyController lobbyController = FindObjectOfType<LobbyController>();
+                    lobbyController.ToggleReadiness();
                 }
+                    
                 break;
             default:
-                Debug.LogError("Invalid action.");
+                playerAction = new SkipAction(0);
                 break;
+
         }
-        FindObjectsOfType<RoundModel>()[0].NextRound();
+
+        RoundModel roundModel = GameManager.Instance.GetComponent<RoundModel>();
+        if (roundModel != null && playerAction != null)
+        {
+
+            roundModel.TryToMakePlayerAction(playerAction);
+        }
     }
 
     void RemoveChip(int bet)
@@ -379,7 +385,6 @@ public class PlayerController : NetworkBehaviour
 
     void Update()
     {
-        Debug.Log(isMyTurn.Value);
         if (isRoundStarted && isMyTurn.Value)
         {
             getAvailableActions();
@@ -441,8 +446,7 @@ public class PlayerController : NetworkBehaviour
     {
         if (context.performed)
         {
-            Act(BetAction.reRaise, 100); 
+            Act(BetAction.reRaise, 100);
         }
     }
-
 }

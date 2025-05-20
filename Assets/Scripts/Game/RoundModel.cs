@@ -23,6 +23,10 @@ public class RoundModel : NetworkBehaviour
     private PlayerController currentPlayer;
     private int currentPlayerIndex = 0;
 
+    private ulong waitingForTurnOfPlayerWithId;
+    private ulong firstPlayerId;
+    private NetworkList<ulong> playerIds = new NetworkList<ulong>();
+
     private void Awake()
     {
         InitializeDeckAndPlayers();
@@ -32,40 +36,26 @@ public class RoundModel : NetworkBehaviour
         }
     }
 
-    private void Start()
-    {
-    
-        //dealCards(); // Initial card dealing
-        //addCardOnTable(5); // Add cards to the table (flop, turn, river)
-    }
-
-    private void Update()
-    {
-        //CheckAndDealCardsToNewPlayers();
-    }
-
-    public void StartGame()
+    public void StartGame(ulong[] playerIds, ulong firstPlayerId)
     {
         dealCards();
-        addCardOnTableServerRpc(2);
+        this.firstPlayerId = firstPlayerId;
+        waitingForTurnOfPlayerWithId = firstPlayerId;
+        this.playerIds = new NetworkList<ulong>(playerIds);
     }
 
     public void NextRound()
     {
-        // Reset turn state for all players before assigning new turns
         foreach (PlayerController player in playerModels)
         {
             player.SetMyTurn(false);
         }
 
-        // Update the current player and set their turn to true
         currentPlayer = playerModels[currentPlayerIndex];
         currentPlayer.SetMyTurn(true);
 
-        // Log the current player's turn
         Debug.Log("It's now " + currentPlayerIndex+ "'s turn.");
 
-        // Update currentPlayerIndex with looping behavior
         currentPlayerIndex = (currentPlayerIndex + 1) % playerModels.Count;
     }
 
@@ -111,16 +101,63 @@ public class RoundModel : NetworkBehaviour
             {
                 playerModels.Add(player);
                 Debug.Log("New player added: " + player.name);
-                // Optionally deal cards immediately to the new player here
             }
         }
-        // Deal cards to all players at the start of the round
+
         foreach (PlayerController playerModel in playerModels)
         {
             if (playerModel.IsSpawned)
-                //DealCardsToPlayerServerRpc(new NetworkObjectReference(playerModel.GetComponent<NetworkObject>()));
                 DealToPlayersServerRpc(new NetworkObjectReference(playerModel.gameObject.GetComponent<NetworkObject>()));
         }
+    }
+
+    public void TryToMakePlayerAction(IPlayerAction playerAction)
+    {
+        if (IsServer)
+        {
+            TryToMakePlayerAction(0, playerAction);
+        } else
+        {
+            NetworkPlayerAction networkAction = new NetworkPlayerAction
+            {
+                Value = playerAction
+            };
+
+            TryToMakePlayerActionServerRpc(networkAction);
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void TryToMakePlayerActionServerRpc(
+        NetworkPlayerAction networkPlayerAction,
+        ServerRpcParams rpcParams = default
+    )
+    {
+        IPlayerAction playerAction = networkPlayerAction.Value;
+        ulong playerId = rpcParams.Receive.SenderClientId;
+        TryToMakePlayerAction(playerId, playerAction);
+    }
+
+    private void TryToMakePlayerAction(ulong playerId, IPlayerAction playerAction)
+    {
+        if (playerId == waitingForTurnOfPlayerWithId)
+        {
+            Debug.Log($"QUEUE: Accepted action from {playerId}");
+            SwitchTurnToNextPlayer();
+        }
+        else
+        {
+            Debug.Log($"QUEUE: Declined action from {playerId}");
+        }
+    }
+
+    private void SwitchTurnToNextPlayer()
+    {
+        int currentPlayerIndex = playerIds.IndexOf(waitingForTurnOfPlayerWithId);
+        if (currentPlayerIndex == -1) return;
+
+        currentPlayerIndex = (currentPlayerIndex + 1) % playerIds.Count;
+        waitingForTurnOfPlayerWithId = playerIds[currentPlayerIndex]; 
     }
 
     [ServerRpc]
