@@ -112,11 +112,13 @@ public class GameManager : NetworkBehaviour
     private void ClearHand(ulong clientId)
     {
         NetworkObject playerNetworkObject = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(clientId);
-        PlayerController playerController = playerNetworkObject.GetComponent<PlayerController>();
+        if (playerNetworkObject == null) return;
 
+        PlayerController playerController = playerNetworkObject.GetComponent<PlayerController>();
         if (playerController != null)
         {
-            GameManager.FindObjectsOfType<RoundModel>()[0].BackToDeckServerRpc(new NetworkObjectReference(playerNetworkObject));
+            playerController.ClearHand();
+            
         }
     }
 

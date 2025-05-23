@@ -1,4 +1,4 @@
-using JetBrains.Annotations;
+﻿using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,55 +15,64 @@ public class RoundModel : NetworkBehaviour
     public List<CardModel> cardsOnTable = new List<CardModel>();
     public int minimalBet;
     public BettingController bettingController;
-    private List<Transform> cardSlots = new List<Transform>();
-    private List<Transform> foldSlots = new List<Transform>();
+    private GameObject[] cardSlots;
+    private GameObject[] foldSlots;
     private List<int> playerSpawns = new List<int>();
     private Vector3 deckPosition;
+    private int currentBank = 0;
 
+    private NetworkVariable<int> currentHighestBet = new NetworkVariable<int> (0);
+    
     private PlayerController currentPlayer;
     private int currentPlayerIndex = 0;
 
     private ulong waitingForTurnOfPlayerWithId;
     private ulong firstPlayerId;
     private NetworkList<ulong> playerIds = new NetworkList<ulong>();
-
+    private NetworkList<PlayerState> playerStates = new NetworkList<PlayerState>();
     private void Awake()
     {
         InitializeDeckAndPlayers();
-        foreach (PlayerController player in playerModels)
-        {
-            player.SetMyTurn(false);
-        }
+     
     }
 
+    public int GetCurrentHighestBet()
+    {
+        return currentHighestBet.Value;
+    }
     public void StartGame(ulong[] playerIds, ulong firstPlayerId)
     {
         dealCards();
         this.firstPlayerId = firstPlayerId;
         waitingForTurnOfPlayerWithId = firstPlayerId;
-        this.playerIds = new NetworkList<ulong>(playerIds);
-    }
 
-    public void NextRound()
-    {
-        foreach (PlayerController player in playerModels)
+        this.playerIds = new NetworkList<ulong>(playerIds);
+        playerStates.Clear();
+        foreach (var id in playerIds)
         {
-            player.SetMyTurn(false);
+            playerStates.Add(new PlayerState
+            {
+                id = id,
+                currentBet = 0,
+                hasFolded = false
+            });
         }
 
-        currentPlayer = playerModels[currentPlayerIndex];
-        currentPlayer.SetMyTurn(true);
-
-        Debug.Log("It's now " + currentPlayerIndex+ "'s turn.");
-
-        currentPlayerIndex = (currentPlayerIndex + 1) % playerModels.Count;
+        Debug.Log($"Initialized {playerStates.Count} player states.");
     }
-
 
 
     private void InitializeDeckAndPlayers()
     {
         CardModel[] allCards = FindObjectsOfType<CardModel>();
+
+        // Posortuj foldSloty według nazw (foldSlot1, foldSlot2, itd.)
+        foldSlots = GameObject.FindGameObjectsWithTag("fold_slot")
+                             .OrderBy(slot => slot.name)
+                             .ToArray();
+
+        cardSlots = GameObject.FindGameObjectsWithTag("slot");
+
         foreach (CardModel card in allCards)
         {
             deck.Add(card);
@@ -78,19 +87,8 @@ public class RoundModel : NetworkBehaviour
                 Debug.Log("New player added: " + player.name);
             }
         }
-
-        foreach (Transform child in transform)
-        {
-            if (child.CompareTag("slot"))
-            {
-                cardSlots.Add(child);
-            }
-            else if (child.CompareTag("fold_slot"))
-            {
-                foldSlots.Add(child);
-            }
-        }
     }
+
 
     public void dealCards()
     {
@@ -138,26 +136,187 @@ public class RoundModel : NetworkBehaviour
         TryToMakePlayerAction(playerId, playerAction);
     }
 
-    private void TryToMakePlayerAction(ulong playerId, IPlayerAction playerAction)
+    private void UpdatePlayersState()
     {
-        if (playerId == waitingForTurnOfPlayerWithId)
+        if (!IsServer) return;
+
+        for (int i = 0; i < playerModels.Count; i++)
         {
-            Debug.Log($"QUEUE: Accepted action from {playerId}");
-            SwitchTurnToNextPlayer();
-        }
-        else
-        {
-            Debug.Log($"QUEUE: Declined action from {playerId}");
+            var player = playerModels[i];
+            ulong playerId = player.OwnerClientId;
+
+            // Find or create state
+            int stateIndex = -1;
+            for (int j = 0; j < playerStates.Count; j++)
+            {
+                if (playerStates[j].id == playerId)
+                {
+                    stateIndex = j;
+                    break;
+                }
+            }
+
+            PlayerState state;
+            if (stateIndex == -1)
+            {
+                state = new PlayerState
+                {
+                    id = playerId,
+                    currentBet = player.currentBet,
+                    currentBalance = player.currentBalance,
+                    hasFolded = false,
+                };
+                playerStates.Add(state);
+            }
+            else
+            {
+                state = playerStates[stateIndex];
+                state.currentBet = player.currentBet;
+                state.currentBalance = player.currentBalance;
+                playerStates[stateIndex] = state;
+            }
+
+            player.currentBalance = state.currentBalance;
+            player.currentBet = state.currentBet;
         }
     }
 
+    private void TryToMakePlayerAction(ulong playerId, IPlayerAction playerAction)
+    {
+        if (playerId != waitingForTurnOfPlayerWithId)
+        {
+            Debug.Log($"QUEUE: Declined action from {playerId}");
+            return;
+        }
+
+        int index = -1;
+        for (int i = 0; i < playerStates.Count; i++)
+        {
+            if (playerStates[i].id == playerId)
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index == -1)
+        {
+            Debug.LogWarning($"No player state found for player {playerId}");
+            return;
+        }
+
+        var state = playerStates[index];
+        Debug.Log($"QUEUE: Accepted action {playerAction.TypeId} from {playerId}");
+
+        NetworkObject playerNetworkObject = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(playerId);
+        if (playerNetworkObject == null)
+        {
+            Debug.LogWarning($"No network object found for player {playerId}");
+            return;
+        }
+
+        PlayerController player = playerNetworkObject.GetComponent<PlayerController>();
+        if (player == null)
+        {
+            Debug.LogWarning($"No PlayerController found on player object {playerId}");
+            return;
+        }
+
+        if (playerAction.HasFolded)
+        {
+            state.hasFolded = true;
+            playerStates[index] = state;
+            player.ClearHand();
+            Debug.Log($"Player {playerId} folded.");
+        }
+        else
+        {
+            if (playerAction.TypeId == 3)
+            {
+                if(currentHighestBet.Value != 0)
+                {
+                    Debug.LogWarning($"PLayer tried to check but the current highest bet is: {currentHighestBet}");
+                    return;
+                }
+                Debug.Log($"Player {playerId} checked.");
+
+            }
+            else if (playerAction.TypeId == 2 || playerAction.TypeId == 4 || playerAction.TypeId == 5) // call / raise / reraise
+            {
+                int requiredToCall = currentHighestBet.Value - state.currentBet;
+                int bet = playerAction.NewBet;
+
+                if (bet < requiredToCall)
+                {
+                    Debug.LogWarning($"Player {playerId} bet too low: {bet}, required: {requiredToCall}");
+                    return;
+                }
+
+                int additionalBet = bet - state.currentBet;
+                if (additionalBet > player.currentBalance)
+                {
+                    Debug.LogWarning($"Player {playerId} doesn't have enough chips. Needed: {additionalBet}, has: {state.currentBalance}");
+                    return;
+                }
+
+                // Remove chips first – this updates player.currentBalance
+                player.RemoveChip(additionalBet);
+
+                // Then update the state from the player object
+                state.currentBalance = player.currentBalance;
+                state.currentBet = bet;
+                playerStates[index] = state;
+
+                player.currentBet = state.currentBet;
+
+                currentBank += additionalBet;
+
+                if (state.currentBet > currentHighestBet.Value)
+                {
+                    currentHighestBet.Value = state.currentBet;
+                    Debug.Log($"Player {playerId} raised to {state.currentBet}. New balance: {state.currentBalance}");
+                }
+                else if (additionalBet == 0)
+                {
+                    Debug.Log($"Player {playerId} called with {additionalBet}. New balance: {state.currentBalance}");
+                }
+            }
+        }
+
+        SwitchTurnToNextPlayer();
+        UpdatePlayersState(); // ensure sync
+    }
+
+
     private void SwitchTurnToNextPlayer()
     {
-        int currentPlayerIndex = playerIds.IndexOf(waitingForTurnOfPlayerWithId);
+        int currentPlayerIndex = -1;
+
+        for (int i = 0; i < playerStates.Count; i++)
+        {
+            if (playerStates[i].id == waitingForTurnOfPlayerWithId)
+            {
+                currentPlayerIndex = i;
+                break;
+            }
+        }
+
         if (currentPlayerIndex == -1) return;
 
-        currentPlayerIndex = (currentPlayerIndex + 1) % playerIds.Count;
-        waitingForTurnOfPlayerWithId = playerIds[currentPlayerIndex]; 
+        int startingIndex = currentPlayerIndex;
+
+        do
+        {
+            currentPlayerIndex = (currentPlayerIndex + 1) % playerStates.Count;
+
+            if (!playerStates[currentPlayerIndex].hasFolded)
+            {
+                waitingForTurnOfPlayerWithId = playerStates[currentPlayerIndex].id;
+                return;
+            }
+
+        } while (currentPlayerIndex != startingIndex);
+
+        Debug.Log("No active players left to take a turn.");
     }
 
     [ServerRpc]
@@ -236,14 +395,18 @@ public class RoundModel : NetworkBehaviour
             {
                 GameObject cardModel = cardObject.gameObject;
                 deck.Remove(cardModel.GetComponent<CardModel>());
-                foreach (Transform slot in cardSlots)
-                    if (slot.childCount == 0)
+                Transform transform = null;
+                foreach (GameObject slot in cardSlots)
+                {
+                    transform = slot.transform;
+                    if (transform.childCount == 0)
                     {
                         cardModel.transform.Rotate(0, 180f, 0);
                         cardModel.transform.localPosition = Vector3.zero;
-                        Debug.Log("Assigned card to slot: " + slot.name);
+                        Debug.Log("Assigned card to slot: " + transform.name);
                         break;
                     }
+                }
             }
         }
     }
@@ -267,17 +430,18 @@ public class RoundModel : NetworkBehaviour
                 cardsOnTable.Add(randomCard);
                 deck.Remove(randomCard);
 
-                
 
-                foreach (Transform slot in cardSlots)
+                Transform transform = null;
+                foreach (GameObject slot in cardSlots)
                 {
-                    if (slot.childCount == 0)
+                    transform = slot.transform;
+                    if (transform.childCount == 0)
                     {
                         GameObject cardObject = randomCard.gameObject;
                         cardObject.transform.Rotate(0, 180f, 0);
-                        cardObject.transform.SetParent(slot);
+                        cardObject.transform.SetParent(transform);
                         cardObject.transform.localPosition = Vector3.zero;
-                        Debug.Log("Assigned card to slot: " + slot.name);
+                        Debug.Log("Assigned card to slot: " + transform.name);
                         break;
                     }
                 }

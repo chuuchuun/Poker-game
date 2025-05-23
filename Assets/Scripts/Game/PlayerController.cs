@@ -110,48 +110,21 @@ public class PlayerController : NetworkBehaviour
 
     public void Act(BetAction action, int newBet = 0)
     {
-        IPlayerAction playerAction = null;
-        switch (action)
-        {
-            case BetAction.check:
-                break;
-
-            case BetAction.fold:
-                break;
-
-            case BetAction.call:
-                currentBalance -= currentBet;
-                break;
-
-            case BetAction.raise:
-                currentBet = newBet;
-                currentBalance -= newBet;
-                RemoveChip(newBet);
-                break;
-
-            case BetAction.reRaise:
-                currentBet = newBet;
-                currentBalance -= newBet;
-                break;
-
-            case BetAction.start:
-                MatchController matchController = FindObjectOfType<MatchController>();
-                playerAction = new SkipAction(0);
-
-                if (!matchController.wasGameStarted)
-                {
-                    LobbyController lobbyController = FindObjectOfType<LobbyController>();
-                    lobbyController.ToggleReadiness();
-                }
-                    
-                break;
-            default:
-                playerAction = new SkipAction(0);
-                break;
-
-        }
-
         RoundModel roundModel = GameManager.Instance.GetComponent<RoundModel>();
+
+        IPlayerAction playerAction = action switch
+        {
+            BetAction.check => new CheckAction(currentBet),
+            BetAction.fold => new FoldAction(currentBet),
+            BetAction.call => new CallAction(roundModel.GetCurrentHighestBet()),
+            BetAction.raise => new RaiseAction(newBet),
+            BetAction.reRaise => new ReRaiseAction(newBet),
+            BetAction.start => new SkipAction(0),
+            _ => new SkipAction(currentBet)
+        };
+
+        
+
         if (roundModel != null && playerAction != null)
         {
 
@@ -159,7 +132,18 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
-    void RemoveChip(int bet)
+    public void ClearHand()
+    {
+
+        
+        RoundModel round = GameManager.Instance.GetComponent<RoundModel>();
+        if (round != null && IsServer)
+        {
+            round.BackToDeckServerRpc(new NetworkObjectReference(this.NetworkObject));
+        }
+    }
+
+    public void RemoveChip(int bet)
     {
         List<ChipModel> chipsToRemove = new List<ChipModel>();
 
@@ -177,6 +161,7 @@ public class PlayerController : NetworkBehaviour
 
                     totalChips.Remove(chip);
                     RemoveFromColorList(chip);
+                    currentBalance -= chipValue;
                 }
                 else
                 {
@@ -193,6 +178,7 @@ public class PlayerController : NetworkBehaviour
         {
             Debug.Log($"Removed chips for bet: {string.Join(", ", chipsToRemove.Select(c => c.value))}");
         }
+
     }
 
     ChipModel GetChipByValue(int value)
@@ -293,14 +279,6 @@ public class PlayerController : NetworkBehaviour
 
         PopulateChipsList();
     }
-    public void SetMyTurn(bool _isMyTurn)
-    {
-        if (IsServer)  // Only set this on the server side
-        {
-            isMyTurn.Value = _isMyTurn;
-        }
-    }
-
     void PopulateChipsList()
     {
         totalChips.Clear();
@@ -383,14 +361,31 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
-    void Update()
+   
+    void InitializeChips()
     {
-        if (isRoundStarted && isMyTurn.Value)
+        foreach (ChipModel chip in totalChips)
         {
-            getAvailableActions();
+            currentBalance += chip.value;
+            switch (chip.color)
+            {
+                case ChipColor.black:
+                    blackChips.Add(chip);
+                    break;
+                case ChipColor.red:
+                    redChips.Add(chip);
+                    break;
+                case ChipColor.green:
+                    greenChips.Add(chip);
+                    break;
+                case ChipColor.blue:
+                    blueChips.Add(chip);
+                    break;
+                default:
+                    break;
+            }
         }
     }
-
 
     public void OnStart(InputAction.CallbackContext context)
     {
@@ -403,12 +398,17 @@ public class PlayerController : NetworkBehaviour
                 lobbyController.ToggleReadiness();
                 return;
             }
-
+            InitializeChips();
             Act(BetAction.start);
         }
+
+
     }
 
-
+    private void Update()
+    {
+        getAvailableActions();
+    }
 
     public void OnCall(InputAction.CallbackContext context)
     {
