@@ -9,28 +9,32 @@ public struct NetworkPlayerAction : INetworkSerializable
     {
         if (serializer.IsReader)
         {
-            // Deserialize the type identifier
+            // Read the TypeId
             int typeId = 0;
             serializer.SerializeValue(ref typeId);
 
-            // Create the appropriate action type
+            // Create the correct action instance
             Value = typeId switch
             {
-                0 => new SkipAction(0),  // 0 = SkipAction
-                // Add other action types here
+                0 => new SkipAction(0),
+                1 => new FoldAction(),
+                2 => new CallAction(),
+                3 => new CheckAction(),
+                4 => new RaiseAction(),
+                5 => new ReRaiseAction(),
                 _ => throw new ArgumentException($"Unknown action type: {typeId}")
             };
 
-            // Deserialize the action data
+            // Deserialize the inner action data
             Value.NetworkSerialize(serializer);
         }
         else
         {
-            // Serialize the type identifier
+            // Write the TypeId
             int typeId = Value.TypeId;
             serializer.SerializeValue(ref typeId);
 
-            // Serialize the action data
+            // Serialize the inner action data
             Value.NetworkSerialize(serializer);
         }
     }
