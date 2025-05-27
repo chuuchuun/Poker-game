@@ -9,6 +9,14 @@ using UnityEngine;
 
 public class RoundModel : NetworkBehaviour
 {
+    private QueueControlBehavior queueControlBehavior
+    {
+        get
+        {
+            return GameManager.Instance.GetComponent<QueueControlBehavior>();
+        }
+    }
+
     private List<PlayerController> playerModels = new List<PlayerController>();
     private List<CardModel> deck = new List<CardModel>();
 
@@ -22,18 +30,11 @@ public class RoundModel : NetworkBehaviour
     private int currentBank = 0;
 
     private NetworkVariable<int> currentHighestBet = new NetworkVariable<int> (0);
-    
-    private PlayerController currentPlayer;
-    private int currentPlayerIndex = 0;
 
-    private ulong waitingForTurnOfPlayerWithId;
-    private ulong firstPlayerId;
-    private NetworkList<ulong> playerIds = new NetworkList<ulong>();
     private NetworkList<PlayerState> playerStates = new NetworkList<PlayerState>();
     private void Awake()
     {
         InitializeDeckAndPlayers();
-     
     }
 
     public int GetCurrentHighestBet()
@@ -43,22 +44,20 @@ public class RoundModel : NetworkBehaviour
     public void StartGame(ulong[] playerIds, ulong firstPlayerId)
     {
         dealCards();
-        this.firstPlayerId = firstPlayerId;
-        waitingForTurnOfPlayerWithId = firstPlayerId;
+        queueControlBehavior.SetFirstPlayerToMove(firstPlayerId);
+        queueControlBehavior.SetPlayers(playerIds.ToList());
 
-        this.playerIds = new NetworkList<ulong>(playerIds);
-        playerStates.Clear();
-        foreach (var id in playerIds)
+        var mappedStates = playerIds.Select(id => new PlayerState
         {
-            playerStates.Add(new PlayerState
-            {
-                id = id,
-                currentBet = 0,
-                hasFolded = false
-            });
-        }
+            id = id,
+            currentBet = 0,
+            hasFolded = false
+        });
 
-        Debug.Log($"Initialized {playerStates.Count} player states.");
+        foreach (var state in mappedStates)
+        {
+            playerStates.Add(state);
+        }
     }
 
 
@@ -88,7 +87,6 @@ public class RoundModel : NetworkBehaviour
             }
         }
     }
-
 
     public void dealCards()
     {
@@ -183,7 +181,7 @@ public class RoundModel : NetworkBehaviour
 
     private void TryToMakePlayerAction(ulong playerId, IPlayerAction playerAction)
     {
-        if (playerId != waitingForTurnOfPlayerWithId)
+        if (!queueControlBehavior.ShouldAcceptActionFromPlayerWithId(playerId))
         {
             Debug.Log($"QUEUE: Declined action from {playerId}");
             return;
@@ -191,18 +189,7 @@ public class RoundModel : NetworkBehaviour
 
         int index = -1;
         for (int i = 0; i < playerStates.Count; i++)
-        {
-            if (playerStates[i].id == playerId)
-            {
-                index = i;
-                break;
-            }
-        }
-        if (index == -1)
-        {
-            Debug.LogWarning($"No player state found for player {playerId}");
-            return;
-        }
+            if (playerStates[i].id == playerId) index = i;
 
         var state = playerStates[index];
         Debug.Log($"QUEUE: Accepted action {playerAction.TypeId} from {playerId}");
@@ -282,41 +269,8 @@ public class RoundModel : NetworkBehaviour
             }
         }
 
-        SwitchTurnToNextPlayer();
-        UpdatePlayersState(); // ensure sync
-    }
-
-
-    private void SwitchTurnToNextPlayer()
-    {
-        int currentPlayerIndex = -1;
-
-        for (int i = 0; i < playerStates.Count; i++)
-        {
-            if (playerStates[i].id == waitingForTurnOfPlayerWithId)
-            {
-                currentPlayerIndex = i;
-                break;
-            }
-        }
-
-        if (currentPlayerIndex == -1) return;
-
-        int startingIndex = currentPlayerIndex;
-
-        do
-        {
-            currentPlayerIndex = (currentPlayerIndex + 1) % playerStates.Count;
-
-            if (!playerStates[currentPlayerIndex].hasFolded)
-            {
-                waitingForTurnOfPlayerWithId = playerStates[currentPlayerIndex].id;
-                return;
-            }
-
-        } while (currentPlayerIndex != startingIndex);
-
-        Debug.Log("No active players left to take a turn.");
+        queueControlBehavior.SwitchTurnToNextPlayer();
+        UpdatePlayersState();
     }
 
     [ServerRpc]
@@ -371,9 +325,6 @@ public class RoundModel : NetworkBehaviour
                     deck.Remove(cardModel.GetComponent<CardModel>());
 
                     playerModel.cardsInHand.Add(cardModel.GetComponent<CardModel>());
-
-
-                    //GameObject cardObject = playerModel.cardsInHand[i].gameObject;
                     Transform slot = playerModel.cardSlots[playerModel.cardsInHand.Count - 1];
 
                     cardModel.transform.SetParent(null);
