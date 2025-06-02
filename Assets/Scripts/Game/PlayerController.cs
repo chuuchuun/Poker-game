@@ -134,14 +134,15 @@ public class PlayerController : NetworkBehaviour
 
     public void ClearHand()
     {
+        if (!IsServer) return;
 
-        
-        RoundModel round = GameManager.Instance.GetComponent<RoundModel>();
-        if (round != null && IsServer)
+        var deckControl = GameManager.Instance.GetComponent<DeckControlBehavior>();
+        foreach (CardModel card in cardsInHand)
         {
-            round.BackToDeckServerRpc(new NetworkObjectReference(this.NetworkObject));
+            deckControl.ReturnCard(card);
         }
     }
+
 
     public void RemoveChip(int bet)
     {
