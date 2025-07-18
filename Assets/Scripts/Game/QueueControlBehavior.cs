@@ -17,6 +17,8 @@ public class QueueControlBehavior : NetworkBehaviour
     private ulong waitingForTurnOfPlayerWithId;
     List<QueuePlayerState> queuedPlayers = new List<QueuePlayerState>();
 
+    DeckControlBehavior deckControlBehavior => GameManager.Instance.GetComponent<DeckControlBehavior>();
+
     public void SetFirstPlayerToMove(ulong id)
     {
         firstPlayerId = id;
@@ -52,5 +54,10 @@ public class QueueControlBehavior : NetworkBehaviour
         }
 
         waitingForTurnOfPlayerWithId = queuedPlayers[newIndex].id;
+
+        if (waitingForTurnOfPlayerWithId == firstPlayerId)
+        {
+            deckControlBehavior.AddCardOnTableServerRpc(3);
+        }
     }
 }

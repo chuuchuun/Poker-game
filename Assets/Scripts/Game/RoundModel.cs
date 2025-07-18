@@ -10,12 +10,9 @@ public class RoundModel : NetworkBehaviour
     private DeckControlBehavior deckControlBehavior => GameManager.Instance.GetComponent<DeckControlBehavior>();
 
     private List<PlayerController> playerModels = new List<PlayerController>();
-    public List<CardModel> cardsOnTable = new List<CardModel>();
     public int minimalBet;
     public BettingController bettingController;
 
-    private GameObject[] cardSlots;
-    private GameObject[] foldSlots;
     private int currentBank = 0;
 
     private NetworkVariable<int> currentHighestBet = new NetworkVariable<int>(0);
@@ -23,15 +20,16 @@ public class RoundModel : NetworkBehaviour
 
     private void Awake()
     {
-        InitializePlayersAndSlots();
+        UpdatePlayers();
     }
 
     public int GetCurrentHighestBet() => currentHighestBet.Value;
 
     public void StartGame(ulong[] playerIds, ulong firstPlayerId)
     {
-        deckControlBehavior.InitializeDeck();
-        DealCards();
+        deckControlBehavior.InitializeDeckAndSlots();
+        UpdatePlayers();
+        deckControlBehavior.DealCards(playerModels);
 
         queueControlBehavior.SetFirstPlayerToMove(firstPlayerId);
         queueControlBehavior.SetPlayers(playerIds.ToList());
@@ -47,13 +45,6 @@ public class RoundModel : NetworkBehaviour
         }).ToList();
     }
 
-    private void InitializePlayersAndSlots()
-    {
-        foldSlots = GameObject.FindGameObjectsWithTag("fold_slot").OrderBy(slot => slot.name).ToArray();
-        cardSlots = GameObject.FindGameObjectsWithTag("slot");
-        UpdatePlayers();
-    }
-
     private void UpdatePlayers()
     {
         foreach (PlayerController player in FindObjectsOfType<PlayerController>())
@@ -62,73 +53,6 @@ public class RoundModel : NetworkBehaviour
             {
                 playerModels.Add(player);
                 Debug.Log("New player added: " + player.name);
-            }
-        }
-    }
-
-    private void DealCards()
-    {
-        UpdatePlayers();
-        foreach (var player in playerModels.Where(p => p.IsSpawned))
-        {
-            DealToPlayersServerRpc(
-                new NetworkObjectReference(player.GetComponent<NetworkObject>())
-            );
-        }
-    }
-
-    [ServerRpc]
-    public void DealToPlayersServerRpc(NetworkObjectReference playerNetwork)
-    {
-        if (!playerNetwork.TryGet(out NetworkObject playerObject)) return;
-
-        PlayerController playerModel = playerObject.GetComponent<PlayerController>();
-        List<CardModel> dealtCards = new List<CardModel>();
-
-        int cardsNeeded = 2 - playerModel.cardsInHand.Count;
-        for (int i = 0; i < cardsNeeded; i++)
-        {
-            CardModel card = deckControlBehavior.DrawRandomCard();
-            if (card != null)
-            {
-                playerModel.cardsInHand.Add(card);
-                dealtCards.Add(card);
-            }
-        }
-
-        for (int i = 0; i < playerModel.cardsInHand.Count; i++)
-        {
-            var cardObject = playerModel.cardsInHand[i].gameObject;
-            var slot = playerModel.cardSlots[i];
-
-            cardObject.transform.SetParent(null);
-            cardObject.transform.position = slot.position;
-            cardObject.transform.rotation = Quaternion.Euler(0, 180f, 0);
-        }
-
-        foreach (var card in dealtCards)
-        {
-            MoveCardToPlayerClientRpc(playerNetwork, new NetworkObjectReference(card.GetComponent<NetworkObject>()));
-        }
-    }
-
-    [ClientRpc]
-    private void MoveCardToPlayerClientRpc(NetworkObjectReference playerNetwork, NetworkObjectReference cardNetwork)
-    {
-        if (NetworkManager.IsHost) return;
-
-        if (playerNetwork.TryGet(out var playerObj) && cardNetwork.TryGet(out var cardObj))
-        {
-            var player = playerObj.GetComponent<PlayerController>();
-            var card = cardObj.GetComponent<CardModel>();
-
-            if (player.cardsInHand.Count < 2)
-            {
-                player.cardsInHand.Add(card);
-                var slot = player.cardSlots[player.cardsInHand.Count - 1];
-                card.transform.SetParent(null);
-                card.transform.position = slot.position;
-                card.transform.rotation = Quaternion.Euler(0, 180f, 0);
             }
         }
     }
@@ -216,52 +140,6 @@ public class RoundModel : NetworkBehaviour
                 playerStates.Add(state);
             else
                 playerStates[index] = state;
-        }
-    }
-
-    [ServerRpc]
-    public void AddCardToTableServerRpc(int count)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            CardModel card = deckControlBehavior.DrawRandomCard();
-            if (card == null) break;
-
-            cardsOnTable.Add(card);
-
-            foreach (var slot in cardSlots)
-            {
-                if (slot.transform.childCount == 0)
-                {
-                    var cardObj = card.gameObject;
-                    cardObj.transform.SetParent(slot.transform);
-                    cardObj.transform.localPosition = Vector3.zero;
-                    cardObj.transform.rotation = Quaternion.Euler(0, 180f, 0);
-                    AddCardToTableClientRpc(new NetworkObjectReference(card.GetComponent<NetworkObject>()));
-                    break;
-                }
-            }
-        }
-    }
-
-    [ClientRpc]
-    private void AddCardToTableClientRpc(NetworkObjectReference cardNetwork)
-    {
-        if (NetworkManager.IsHost) return;
-
-        if (cardNetwork.TryGet(out var cardObject))
-        {
-            var card = cardObject.gameObject;
-            foreach (var slot in cardSlots)
-            {
-                if (slot.transform.childCount == 0)
-                {
-                    card.transform.SetParent(slot.transform);
-                    card.transform.localPosition = Vector3.zero;
-                    card.transform.rotation = Quaternion.Euler(0, 180f, 0);
-                    break;
-                }
-            }
         }
     }
 }

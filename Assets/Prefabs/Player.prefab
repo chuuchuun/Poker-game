@@ -712,7 +712,7 @@ GameObject:
   - component: {fileID: 6232583132539715289}
   m_Layer: 0
   m_Name: Slot1
-  m_TagString: slot
+  m_TagString: hand_slot
   m_Icon: {fileID: 3936346786652291628, guid: 0000000000000000d000000000000000, type: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -945,7 +945,7 @@ GameObject:
   - component: {fileID: 1547051104851191432}
   m_Layer: 0
   m_Name: Slot2
-  m_TagString: slot
+  m_TagString: hand_slot
   m_Icon: {fileID: 5132851093641282708, guid: 0000000000000000d000000000000000, type: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -9716,7 +9716,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 3749809545
+  GlobalObjectIdHash: 3536297955
   InScenePlacedSourceGlobalObjectIdHash: 3749809545
   AlwaysReplicateAsRoot: 1
   SynchronizeTransform: 1
@@ -9746,6 +9746,8 @@ MonoBehaviour:
   foldText: {fileID: 0}
   raiseText: {fileID: 0}
   reraiseText: {fileID: 0}
+  isMyTurn:
+    m_InternalValue: 0
 --- !u!114 &3148567107051518674
 MonoBehaviour:
   m_ObjectHideFlags: 0

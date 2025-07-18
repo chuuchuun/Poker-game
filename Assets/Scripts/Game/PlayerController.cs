@@ -261,7 +261,7 @@ public class PlayerController : NetworkBehaviour
         List<Transform> children = gameObject.GetComponentsInChildren<Transform>().ToList();
         foreach(Transform transform in children)
         {
-            if (transform.CompareTag("slot"))
+            if (transform.CompareTag("hand_slot"))
             {
                 cardSlots.Add(transform);
                 Debug.Log($"aDDED CARD SLOT {transform.name}");

@@ -13,6 +13,7 @@ TagManager:
   - reraise_text
   - fold_slot
   - table
+  - hand_slot
   layers:
   - Default
   - TransparentFX
