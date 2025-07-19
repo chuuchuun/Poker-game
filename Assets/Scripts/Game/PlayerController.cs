@@ -134,14 +134,15 @@ public class PlayerController : NetworkBehaviour
 
     public void ClearHand()
     {
+        if (!IsServer) return;
 
-        
-        RoundModel round = GameManager.Instance.GetComponent<RoundModel>();
-        if (round != null && IsServer)
+        var deckControl = GameManager.Instance.GetComponent<DeckControlBehavior>();
+        foreach (CardModel card in cardsInHand)
         {
-            round.BackToDeckServerRpc(new NetworkObjectReference(this.NetworkObject));
+            deckControl.ReturnCard(card);
         }
     }
+
 
     public void RemoveChip(int bet)
     {
@@ -260,7 +261,7 @@ public class PlayerController : NetworkBehaviour
         List<Transform> children = gameObject.GetComponentsInChildren<Transform>().ToList();
         foreach(Transform transform in children)
         {
-            if (transform.CompareTag("slot"))
+            if (transform.CompareTag("hand_slot"))
             {
                 cardSlots.Add(transform);
                 Debug.Log($"aDDED CARD SLOT {transform.name}");
