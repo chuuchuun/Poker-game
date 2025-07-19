@@ -33,10 +33,15 @@ public class DeckControlBehavior : NetworkBehaviour
                 return int.TryParse(numberStr, out int number) ? number : 0;
             })
             .ToArray();
-
         foldSlots = GameObject
-            .FindGameObjectsWithTag("fold_slot")
-            .OrderBy(slot => slot.name).ToArray();
+                        .FindGameObjectsWithTag("fold_slot")
+                        .OrderBy(slot =>
+                        {
+                            string name = slot.name;
+                            string numberStr = new string(name.Where(char.IsDigit).ToArray());
+                            return int.TryParse(numberStr, out int number) ? number : 0;
+                        })
+                        .ToArray();
     }
 
     public void DealCards(List<PlayerController> playerModels)
@@ -127,9 +132,33 @@ public class DeckControlBehavior : NetworkBehaviour
 
     public void ReturnCard(CardModel card)
     {
-        if (!deck.Contains(card))
-            deck.Add(card);
+        PlayerController player = FindObjectsOfType<PlayerController>()
+            .FirstOrDefault(p => p.cardsInHand.Contains(card));
+
+        if (player != null)
+        {
+            int playerIndex = player.GetSpawnIndex();
+            int foldSlotStart = playerIndex * 2;
+            int foldSlotEnd = foldSlotStart + 2;
+            
+
+            for (int i = foldSlotStart; i < foldSlotEnd && i < foldSlots.Length; i++)
+            {
+                if (foldSlots[i].transform.childCount == 0)
+                {
+                    card.transform.SetParent(foldSlots[i].transform);
+                    card.transform.localPosition = Vector3.zero;
+                    card.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            card.transform.SetParent(null);
+        }
     }
+
 
     [ClientRpc]
     private void AddCardToTableClientRpc(NetworkObjectReference cardNetwork)
