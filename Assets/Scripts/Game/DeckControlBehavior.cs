@@ -27,7 +27,8 @@ public class DeckControlBehavior : NetworkBehaviour
 
         cardSlots = GameObject
             .FindGameObjectsWithTag("slot")
-            .OrderBy(slot => {
+            .OrderBy(slot =>
+            {
                 string name = slot.name;
                 string numberStr = new string(name.Where(char.IsDigit).ToArray());
                 return int.TryParse(numberStr, out int number) ? number : 0;
@@ -46,7 +47,6 @@ public class DeckControlBehavior : NetworkBehaviour
 
     public void DealCards(List<PlayerController> playerModels)
     {
-        
         foreach (var player in playerModels.Where(p => p.IsSpawned))
         {
             DealToPlayersServerRpc(
@@ -95,7 +95,6 @@ public class DeckControlBehavior : NetworkBehaviour
     {
         if (NetworkManager.IsHost)
         {
-
             for (int i = 0; i < cardCount; i++)
             {
                 if (deck.Count == 0)
@@ -104,11 +103,9 @@ public class DeckControlBehavior : NetworkBehaviour
                     break;
                 }
 
-
                 CardModel randomCard = deck[Random.Range(0, deck.Count)];
                 cardsOnTable.Add(randomCard);
                 deck.Remove(randomCard);
-
 
                 Transform transform = null;
                 foreach (GameObject slot in cardSlots)
@@ -125,6 +122,7 @@ public class DeckControlBehavior : NetworkBehaviour
                     }
                 }
 
+                // Notify clients for visual effects only, not for reparenting
                 AddCardToTableClientRpc(new NetworkObjectReference(randomCard.gameObject.GetComponent<NetworkObject>()));
             }
         }
@@ -140,7 +138,6 @@ public class DeckControlBehavior : NetworkBehaviour
             int playerIndex = player.GetSpawnIndex();
             int foldSlotStart = playerIndex * 2;
             int foldSlotEnd = foldSlotStart + 2;
-            
 
             for (int i = foldSlotStart; i < foldSlotEnd && i < foldSlots.Length; i++)
             {
@@ -159,26 +156,12 @@ public class DeckControlBehavior : NetworkBehaviour
         }
     }
 
-
     [ClientRpc]
     private void AddCardToTableClientRpc(NetworkObjectReference cardNetwork)
     {
-        if (NetworkManager.IsHost) return;
-
-        if (cardNetwork.TryGet(out var cardObject))
-        {
-            var card = cardObject.gameObject;
-            foreach (var slot in cardSlots)
-            {
-                if (slot.transform.childCount == 0)
-                {
-                    card.transform.SetParent(slot.transform);
-                    card.transform.localPosition = Vector3.zero;
-                    card.transform.rotation = Quaternion.Euler(0, 360f, 0);
-                    break;
-                }
-            }
-        }
+        // Do NOT reparent or move the card here!
+        // Optionally, play a sound or animation, or highlight the card.
+        // All transform/parenting logic must be done on the server.
     }
 
     private CardModel DrawRandomCard()
@@ -192,21 +175,8 @@ public class DeckControlBehavior : NetworkBehaviour
     [ClientRpc]
     private void MoveCardToPlayerClientRpc(NetworkObjectReference playerNetwork, NetworkObjectReference cardNetwork)
     {
-        if (NetworkManager.IsHost) return;
-
-        if (playerNetwork.TryGet(out var playerObj) && cardNetwork.TryGet(out var cardObj))
-        {
-            var player = playerObj.GetComponent<PlayerController>();
-            var card = cardObj.GetComponent<CardModel>();
-
-            if (player.cardsInHand.Count < 2)
-            {
-                player.cardsInHand.Add(card);
-                var slot = player.cardSlots[player.cardsInHand.Count - 1];
-                card.transform.SetParent(null);
-                card.transform.position = slot.position;
-                card.transform.rotation = Quaternion.Euler(0, 180f, 0);
-            }
-        }
+        // Do NOT reparent or move the card here!
+        // Optionally, play a sound or animation, or highlight the card.
+        // All transform/parenting logic must be done on the server.
     }
 }

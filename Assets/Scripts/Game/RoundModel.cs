@@ -17,6 +17,41 @@ public class RoundModel : NetworkBehaviour
 
     private NetworkVariable<int> currentHighestBet = new NetworkVariable<int>(0);
     private List<PlayerState> playerStates = new List<PlayerState>();
+    private List<ChipModel> bankChips = new List<ChipModel>();
+
+    // Add this method to clean up between rounds
+    public void ClearBank()
+    {
+        if (!IsServer) return;
+
+        foreach (var chip in bankChips)
+        {
+            if (chip != null)
+            {
+                chip.GetComponent<NetworkObject>().Despawn();
+            }
+        }
+        bankChips.Clear();
+        currentBank = 0;
+    }
+    public override void OnNetworkSpawn()
+    {
+        if (IsServer)
+        {
+            Debug.Log("RoundModel spawned on server");
+        }
+        else
+        {
+            Debug.Log($"RoundModel spawned on client {NetworkManager.LocalClientId}");
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SpawnRoundModelServerRpc()
+    {
+        // Already spawned, do nothing
+    }
+
 
     private void Awake()
     {
@@ -39,7 +74,7 @@ public class RoundModel : NetworkBehaviour
             return new PlayerState()
             {
                 id = id,
-                currentBet =0,
+                currentBet = 0,
                 hasFolded = false,
             };
         }).ToList();
@@ -59,6 +94,7 @@ public class RoundModel : NetworkBehaviour
 
     public void TryToMakePlayerAction(IPlayerAction playerAction)
     {
+        Debug.Log("Round model trying to make player action");
         if (IsServer)
         {
             TryToMakePlayerAction(0, playerAction);
@@ -72,11 +108,13 @@ public class RoundModel : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void TryToMakePlayerActionServerRpc(NetworkPlayerAction networkPlayerAction, ServerRpcParams rpcParams = default)
     {
+        Debug.Log($"Received action from client {rpcParams.Receive.SenderClientId}");
         TryToMakePlayerAction(rpcParams.Receive.SenderClientId, networkPlayerAction.Value);
     }
-
     private void TryToMakePlayerAction(ulong playerId, IPlayerAction action)
     {
+        Debug.Log($"Trying to make action for player {playerId}");
+
         if (!queueControlBehavior.ShouldAcceptActionFromPlayerWithId(playerId)) return;
 
         var index = playerStates.FindIndex(s => s.id == playerId);
@@ -103,7 +141,11 @@ public class RoundModel : NetworkBehaviour
                 int additionalBet = bet - state.currentBet;
                 if (additionalBet <= player.currentBalance)
                 {
-                    player.RemoveChip(additionalBet);
+                    var movedChips = player.RemoveChip(additionalBet);
+                    if (movedChips != null)
+                    {
+                        bankChips.AddRange(movedChips);
+                    }
                     state.currentBalance = player.currentBalance;
                     state.currentBet = bet;
                     currentBank += additionalBet;

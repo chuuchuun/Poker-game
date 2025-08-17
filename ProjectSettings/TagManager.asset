@@ -14,6 +14,7 @@ TagManager:
   - fold_slot
   - table
   - hand_slot
+  - chip_bank
   layers:
   - Default
   - TransparentFX
