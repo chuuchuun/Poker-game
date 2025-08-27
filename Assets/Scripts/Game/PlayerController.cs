@@ -267,10 +267,9 @@ public class PlayerController : NetworkBehaviour
         if (chipsToRemove.Count > 0)
         {
             var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
-            if (IsOwner)
-            {
+         
                 MoveChipsToBankServerRpc(chipIds);
-            }
+            
             return chipsToRemove;
         }
 
@@ -335,7 +334,7 @@ public class PlayerController : NetworkBehaviour
 
     // --- NETWORKED CHIP MOVEMENT ---
 
-    [ServerRpc]
+    [ServerRpc(RequireOwnership = false)]
     public void MoveChipsToBankServerRpc(ulong[] chipIds)
     {
         if (!IsServer) return;

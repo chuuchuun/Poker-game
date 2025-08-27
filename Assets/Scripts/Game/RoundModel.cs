@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class RoundModel : NetworkBehaviour
@@ -19,43 +20,19 @@ public class RoundModel : NetworkBehaviour
     private List<PlayerState> playerStates = new List<PlayerState>();
     private List<ChipModel> bankChips = new List<ChipModel>();
 
-    // Add this method to clean up between rounds
-    public void ClearBank()
-    {
-        if (!IsServer) return;
-
-        foreach (var chip in bankChips)
-        {
-            if (chip != null)
-            {
-                chip.GetComponent<NetworkObject>().Despawn();
-            }
-        }
-        bankChips.Clear();
-        currentBank = 0;
-    }
     public override void OnNetworkSpawn()
     {
-        if (IsServer)
-        {
-            Debug.Log("RoundModel spawned on server");
-        }
-        else
-        {
-            Debug.Log($"RoundModel spawned on client {NetworkManager.LocalClientId}");
-        }
+        Debug.Log($"[RoundModel] OnNetworkSpawn | ObjId={NetworkObjectId} | IsServer={IsServer} | IsOwner={IsOwner}");
     }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void SpawnRoundModelServerRpc()
-    {
-        // Already spawned, do nothing
-    }
-
 
     private void Awake()
     {
         UpdatePlayers();
+    }
+
+    private void Start()
+    {
+        Debug.Log($"[RoundModel] Pre-RPC check | IsSpawned={NetworkObject.IsSpawned} | ObjId={NetworkObjectId} | IsServer={IsServer} | IsOwner={IsOwner}");
     }
 
     public int GetCurrentHighestBet() => currentHighestBet.Value;
@@ -70,14 +47,8 @@ public class RoundModel : NetworkBehaviour
         queueControlBehavior.SetPlayers(playerIds.ToList());
 
         playerStates = playerIds.Select(id =>
-        {
-            return new PlayerState()
-            {
-                id = id,
-                currentBet = 0,
-                hasFolded = false,
-            };
-        }).ToList();
+            new PlayerState { id = id, currentBet = 0, hasFolded = false }
+        ).ToList();
     }
 
     private void UpdatePlayers()
@@ -92,28 +63,53 @@ public class RoundModel : NetworkBehaviour
         }
     }
 
-    public void TryToMakePlayerAction(IPlayerAction playerAction)
+    // === Вызов действия игрока ===
+    public void TryToMakePlayerAction(IPlayerAction action)
     {
-        Debug.Log("Round model trying to make player action");
+        Debug.Log($"[RoundModel] TryToMakePlayerAction | IsSpawned={IsSpawned} | IsServer={IsServer}");
+
         if (IsServer)
         {
-            TryToMakePlayerAction(0, playerAction);
+            // Сервер может вызвать напрямую
+            ProcessPlayerAction(NetworkManager.Singleton.LocalClientId, action);
         }
         else
         {
-            TryToMakePlayerActionServerRpc(new NetworkPlayerAction { Value = playerAction });
+            // Клиент → отправляем RPC на сервер
+            var wrapper = new NetworkPlayerAction
+            {
+                ActionType = action.TypeId,
+                BetAmount = action.NewBet
+            };
+            SubmitPlayerActionServerRpc(wrapper);
         }
     }
-
     [ServerRpc(RequireOwnership = false)]
-    public void TryToMakePlayerActionServerRpc(NetworkPlayerAction networkPlayerAction, ServerRpcParams rpcParams = default)
+    private void SubmitPlayerActionServerRpc(NetworkPlayerAction networkAction, ServerRpcParams rpcParams = default)
     {
-        Debug.Log($"Received action from client {rpcParams.Receive.SenderClientId}");
-        TryToMakePlayerAction(rpcParams.Receive.SenderClientId, networkPlayerAction.Value);
+        ulong senderId = rpcParams.Receive.SenderClientId;
+        IPlayerAction action = networkAction.ToAction();
+
+        Debug.Log($"[SERVER] Received action type {networkAction.ActionType} with bet {networkAction.BetAmount} from {senderId}");
+        Debug.Log($"[SERVER] Converted to: {action.GetType().Name}");
+
+        ProcessPlayerAction(senderId, action);
+
+        // После обработки на сервере уведомляем всех клиентов
+        PlayerActionProcessedClientRpc(senderId, networkAction.ActionType, networkAction.BetAmount, networkAction);
     }
-    private void TryToMakePlayerAction(ulong playerId, IPlayerAction action)
+
+    [ClientRpc]
+    private void PlayerActionProcessedClientRpc(ulong playerId, int actionType, int betAmount, NetworkPlayerAction networkAction)
     {
-        Debug.Log($"Trying to make action for player {playerId}");
+        Debug.Log($"[CLIENT] Player {playerId} made action={actionType}, bet={betAmount}");
+        IPlayerAction action = networkAction.ToAction();
+        ProcessPlayerAction(playerId, action);
+    }
+
+    private void ProcessPlayerAction(ulong playerId, IPlayerAction action)
+    {
+        Debug.Log($"[RoundModel] Processing {action.GetType().Name} for player {playerId}");
 
         if (!queueControlBehavior.ShouldAcceptActionFromPlayerWithId(playerId)) return;
 
@@ -134,6 +130,7 @@ public class RoundModel : NetworkBehaviour
             int requiredToCall = currentHighestBet.Value - state.currentBet;
             int bet = action.NewBet;
 
+            // Check only if bet is valid
             if (action.TypeId == 3 && currentHighestBet.Value != 0) return;
 
             if ((action.TypeId == 2 || action.TypeId == 4 || action.TypeId == 5) && bet >= requiredToCall)
@@ -143,9 +140,8 @@ public class RoundModel : NetworkBehaviour
                 {
                     var movedChips = player.RemoveChip(additionalBet);
                     if (movedChips != null)
-                    {
                         bankChips.AddRange(movedChips);
-                    }
+
                     state.currentBalance = player.currentBalance;
                     state.currentBet = bet;
                     currentBank += additionalBet;
@@ -183,5 +179,8 @@ public class RoundModel : NetworkBehaviour
             else
                 playerStates[index] = state;
         }
+
+        // Рассылаем состояние клиентам
     }
+
 }
