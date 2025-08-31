@@ -17,9 +17,8 @@ public class ChipModel : NetworkBehaviour
     public int chipId;
     public NetworkVariable<ulong> ownerClientId = new NetworkVariable<ulong>();
 
-    // Add NetworkVariables for position and parent
     public NetworkVariable<Vector3> networkPosition = new NetworkVariable<Vector3>();
     public NetworkVariable<ulong> parentNetworkId = new NetworkVariable<ulong>();
-    public NetworkVariable<int> stackPosition = new NetworkVariable<int>(-1); // Add this
+    public NetworkVariable<int> stackPosition = new NetworkVariable<int>(-1);
 
 }

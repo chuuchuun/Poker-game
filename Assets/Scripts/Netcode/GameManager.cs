@@ -89,7 +89,7 @@ public class GameManager : NetworkBehaviour
 
     private void SpawnPlayer(ulong clientId, int spawnIndex)
     {
-        if (!IsServer) return; // Ensure only the server runs this
+        if (!IsServer) return;
 
         Transform spawnPoint = spawnPoints[spawnIndex];
         GameObject player = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);

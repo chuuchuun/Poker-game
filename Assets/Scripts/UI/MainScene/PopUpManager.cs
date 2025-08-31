@@ -17,8 +17,7 @@ public class PopUpManager : MonoBehaviour
 
     void Awake()
     {
-        // Ensure singleton pattern
-        if (Instance == null)
+        if (Instance is null)
         {
             Instance = this;
         }
@@ -33,7 +32,6 @@ public class PopUpManager : MonoBehaviour
         popupPanel.SetActive(false);
         IsOpen = false;
 
-        // Add listener for input field submission
         inputField.onSubmit.AddListener(OnInputSubmit);
     }
 
@@ -49,7 +47,6 @@ public class PopUpManager : MonoBehaviour
         else
         {
             Debug.LogWarning($"Invalid input: {input}");
-            // Clear invalid input and keep focus
             inputField.text = "";
             inputField.Select();
             inputField.ActivateInputField();
@@ -70,14 +67,12 @@ public class PopUpManager : MonoBehaviour
 
         IsOpen = true;
 
-        // Notify subscribers that popup opened
         Debug.Log("Raising OnPopupStateChanged event (true)");
         OnPopupStateChanged?.Invoke(true);
     }
 
     private void Update()
     {
-        // Allow ESC to close popup without submitting
         if (IsOpen && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             ClosePopup();
@@ -94,11 +89,9 @@ public class PopUpManager : MonoBehaviour
 
         IsOpen = false;
 
-        // Notify subscribers that popup closed
         OnPopupStateChanged?.Invoke(false);
     }
 
-    // For UI button submission
     public void OnSubmitButtonClicked()
     {
         OnInputSubmit(inputField.text);

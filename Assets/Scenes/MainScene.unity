@@ -1705,6 +1705,7 @@ GameObject:
   - component: {fileID: 345441760}
   - component: {fileID: 345441761}
   - component: {fileID: 345441762}
+  - component: {fileID: 345441763}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -1803,8 +1804,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5021b1156171b194d854c5e610efd9f6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  minimalBet: 0
-  bettingController: {fileID: 0}
 --- !u!114 &345441761
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1830,6 +1829,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cardsOnTable: []
+--- !u!114 &345441763
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 345441753}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f99e1fb8a5e109c42a48dbd1471235a9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playersFolded: []
 --- !u!1001 &349256126
 PrefabInstance:
   m_ObjectHideFlags: 0

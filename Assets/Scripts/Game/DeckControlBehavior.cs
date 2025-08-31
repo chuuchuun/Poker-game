@@ -122,7 +122,6 @@ public class DeckControlBehavior : NetworkBehaviour
                     }
                 }
 
-                // Notify clients for visual effects only, not for reparenting
                 AddCardToTableClientRpc(new NetworkObjectReference(randomCard.gameObject.GetComponent<NetworkObject>()));
             }
         }
@@ -159,9 +158,7 @@ public class DeckControlBehavior : NetworkBehaviour
     [ClientRpc]
     private void AddCardToTableClientRpc(NetworkObjectReference cardNetwork)
     {
-        // Do NOT reparent or move the card here!
-        // Optionally, play a sound or animation, or highlight the card.
-        // All transform/parenting logic must be done on the server.
+        
     }
 
     private CardModel DrawRandomCard()
@@ -175,8 +172,6 @@ public class DeckControlBehavior : NetworkBehaviour
     [ClientRpc]
     private void MoveCardToPlayerClientRpc(NetworkObjectReference playerNetwork, NetworkObjectReference cardNetwork)
     {
-        // Do NOT reparent or move the card here!
-        // Optionally, play a sound or animation, or highlight the card.
-        // All transform/parenting logic must be done on the server.
+        
     }
 }

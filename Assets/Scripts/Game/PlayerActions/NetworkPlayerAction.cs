@@ -17,7 +17,7 @@ public struct NetworkPlayerAction : INetworkSerializable
         {
             0 => new SkipAction(0),
             1 => new FoldAction(BetAmount),
-            2 => new CallAction(BetAmount),
+            2 => new CallAction(BetAmount), 
             3 => new CheckAction(BetAmount),
             4 => new RaiseAction(BetAmount),
             5 => new ReRaiseAction(BetAmount),

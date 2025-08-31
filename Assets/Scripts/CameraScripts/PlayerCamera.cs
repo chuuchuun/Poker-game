@@ -13,22 +13,18 @@ public class PlayerCamera : MonoBehaviour
     float xRotation;
     float yRotation;
 
-    // Add flag to control camera movement
     private bool canMoveCamera = true;
 
-    // Start is called before the first frame update
     void Start()
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        // Subscribe to popup state changes
         PopUpManager.OnPopupStateChanged += HandlePopupStateChanged;
     }
 
     private void OnDestroy()
     {
-        // Unsubscribe to prevent memory leaks
         PopUpManager.OnPopupStateChanged -= HandlePopupStateChanged;
     }
 
@@ -36,7 +32,6 @@ public class PlayerCamera : MonoBehaviour
     {
         canMoveCamera = !isPopupOpen;
 
-        // Update cursor state based on popup
         if (isPopupOpen)
         {
             Cursor.lockState = CursorLockMode.None;
@@ -55,20 +50,15 @@ public class PlayerCamera : MonoBehaviour
         {
             Transform[] siblingsAndDescendants = transform.parent.parent.GetComponentsInChildren<Transform>(true);
 
-            // Search for the "Orientation" Transform
             foreach (Transform t in siblingsAndDescendants)
             {
                 if (t.name == "Orientation")
                 {
                     orientation = t;
-                    break; // Stop searching once the target is found
+                    break;
                 }
             }
-
-            if (orientation == null)
-            {
-                Debug.LogError("Orientation Transform not found in parent's children!");
-            }
+            if (orientation is null) Debug.LogError("Orientation Transform not found in parent's children!");
         }
         else
         {
@@ -76,10 +66,8 @@ public class PlayerCamera : MonoBehaviour
         }
     }
 
-    // Update is called once per frame
     void Update()
     {
-        // Only process camera movement if allowed
         if (!canMoveCamera) return;
 
         float mouseX = Input.GetAxisRaw("Mouse X") * Time.deltaTime * sensX;
@@ -87,9 +75,6 @@ public class PlayerCamera : MonoBehaviour
 
         yRotation += mouseX;
         xRotation -= mouseY;
-
-        // xRotation = Mathf.Clamp(xRotation, -50f, 34f);
-        // yRotation = Mathf.Clamp(yRotation, -60f, 60f);
 
         transform.rotation = Quaternion.Euler(xRotation, yRotation, 0);
         orientation.rotation = Quaternion.Euler(0, yRotation, 0);

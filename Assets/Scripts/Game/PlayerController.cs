@@ -131,7 +131,6 @@ public class PlayerController : NetworkBehaviour
             chipModel.color = color;
             chipModel.ownerClientId.Value = OwnerClientId;
 
-            // Only server assigns IDs
             if (IsServer)
             {
                 chipModel.chipId = GenerateChipId();
@@ -222,9 +221,9 @@ public class PlayerController : NetworkBehaviour
         if (action == BetAction.raise || action == BetAction.reRaise)
         {
             pendingAction = action;
-            pendingBetAmount = newBet; // Default value
+            pendingBetAmount = newBet;
             popupManager.OpenPopup();
-            return; // Don't proceed with action yet
+            return;
         }
 
         IPlayerAction playerAction = action switch
@@ -237,7 +236,7 @@ public class PlayerController : NetworkBehaviour
             BetAction.start => new SkipAction(0),
             _ => new SkipAction(currentBet)
         };
-       
+
         roundModel.TryToMakePlayerAction(playerAction);
     }
 
@@ -245,7 +244,6 @@ public class PlayerController : NetworkBehaviour
     {
         if (pendingAction == BetAction.raise || pendingAction == BetAction.reRaise)
         {
-            // Validate the bet amount
             int currentHighestBet = roundModel.GetCurrentHighestBet();
             int requiredToCall = currentHighestBet - currentBet;
 
@@ -262,13 +260,10 @@ public class PlayerController : NetworkBehaviour
             }
             else
             {
-                // Invalid bet amount, reopen popup
                 Debug.LogWarning($"Invalid bet amount: {betAmount}. Required: {requiredToCall}, Available: {currentBalance}");
                 popupManager.OpenPopup();
             }
         }
-
-        // Reset pending action
         pendingAction = BetAction.start;
         pendingBetAmount = 0;
     }
@@ -316,15 +311,12 @@ public class PlayerController : NetworkBehaviour
         if (chipsToRemove.Count > 0)
         {
             var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
-         
-                MoveChipsToBankServerRpc(chipIds);
+            MoveChipsToBankServerRpc(chipIds);
             
             return chipsToRemove;
         }
-
         return null;
     }
-
 
     ChipModel GetChipByValue(int value)
     {
@@ -343,59 +335,17 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
-    void RemoveFromColorList(ChipModel chip)
-    {
-        // Remove from color list
-        switch (chip.color)
-        {
-            case ChipColor.black: blackChips.Remove(chip); break;
-            case ChipColor.red: redChips.Remove(chip); break;
-            case ChipColor.green: greenChips.Remove(chip); break;
-            case ChipColor.blue: blueChips.Remove(chip); break;
-        }
-
-        Transform targetParent = chip.color switch
-        {
-            ChipColor.black => chipBankBlack,
-            ChipColor.red => chipBankRed,
-            ChipColor.green => chipBankGreen,
-            ChipColor.blue => chipBankBlue,
-            _ => null
-        };
-
-        if (targetParent != null)
-        {
-            int stackCount = targetParent.childCount;
-            float chipHeight = 0.005f;
-            Vector3 localPosition = new Vector3(0, chipHeight * stackCount, 0);
-
-            // Move chip locally on the server/host
-            chip.transform.SetParent(targetParent);
-            chip.transform.localPosition = localPosition;
-            chip.transform.localRotation = Quaternion.identity;
-            chip.gameObject.SetActive(true);
-        }
-        else
-        {
-            chip.gameObject.SetActive(false);
-        }
-    }
-
-    // --- NETWORKED CHIP MOVEMENT ---
-
     [ServerRpc(RequireOwnership = false)]
     public void MoveChipsToBankServerRpc(ulong[] chipIds)
     {
         if (!IsServer) return;
 
-        // Initialize bank if needed
         InitializeBank();
 
-        // Group chips by color and sort by existing stack position
         var chipsByColor = totalChips
             .Where(c => chipIds.Contains((ulong)c.chipId))
             .GroupBy(c => c.color)
-            .OrderBy(g => g.Key); // Consistent processing order
+            .OrderBy(g => g.Key);
 
         foreach (var colorGroup in chipsByColor)
         {
@@ -432,7 +382,6 @@ public class PlayerController : NetworkBehaviour
     [ClientRpc]
     private void UpdateChipPositionClientRpc(int chipId, int bankInstanceId, int stackPosition)
     {
-        // Find chip in all chips (not just player's chips)
         var chip = FindObjectsOfType<ChipModel>().FirstOrDefault(c => c.chipId == chipId);
         if (chip == null)
         {
@@ -504,52 +453,6 @@ public class PlayerController : NetworkBehaviour
             }
         }
     }
-    private void MoveChipsToBankById(IEnumerable<ulong> chipIds)
-    {
-        if (!IsServer)
-        {
-            Debug.LogError("MoveChipsToBankById called on client! This should only run on the server.");
-            return;
-        }
-        var chipsToMove = totalChips.Where(chip => chipIds.Contains((ulong)chip.chipId)).ToList();
-        foreach (var chip in chipsToMove)
-        {
-            totalChips.Remove(chip);
-            switch (chip.color)
-            {
-                case ChipColor.black: blackChips.Remove(chip); break;
-                case ChipColor.red: redChips.Remove(chip); break;
-                case ChipColor.green: greenChips.Remove(chip); break;
-                case ChipColor.blue: blueChips.Remove(chip); break;
-            }
-
-            Transform targetParent = chip.color switch
-            {
-                ChipColor.black => chipBankBlack,
-                ChipColor.red => chipBankRed,
-                ChipColor.green => chipBankGreen,
-                ChipColor.blue => chipBankBlue,
-                _ => null
-            };
-
-            if (targetParent != null)
-            {
-                int stackCount = targetParent.childCount + 1;
-                float chipHeight = 0.005f;
-                Vector3 localPosition = new Vector3(0, chipHeight * stackCount, 0);
-
-                chip.transform.SetParent(targetParent);
-                chip.transform.localPosition = localPosition;
-                chip.transform.localRotation = Quaternion.identity;
-                chip.gameObject.SetActive(true);
-            }
-            else
-            {
-                chip.gameObject.SetActive(false);
-            }
-        }
-    }
-
 
     void PopulateActionTexts()
     {
@@ -598,6 +501,7 @@ public class PlayerController : NetworkBehaviour
                 Debug.Log($"aDDED CARD SLOT {transform.name}");
             }
         }
+
         PopulateActionTexts();
         input = GetComponent<PlayerInput>();
         if (input != null)
@@ -608,8 +512,6 @@ public class PlayerController : NetworkBehaviour
         {
             Debug.Log("something went wrong :(");
         }
-
-
 
         chipBank = GameObject.FindGameObjectWithTag("chip_bank")?.transform;
         if (chipBank != null)
@@ -623,12 +525,8 @@ public class PlayerController : NetworkBehaviour
         {
             Debug.LogError("chip_bank object not found in the scene!");
         }
-
         roundModel = FindObjectOfType<RoundModel>();
-
-
         Debug.Log($"Player {gameObject.name} IsServer={IsServer} IsHost={NetworkManager.Singleton.IsHost} IsClient={IsClient}");
-
         popupManager = FindObjectOfType<PopUpManager>();
         if (popupManager is null)
         {
@@ -636,61 +534,8 @@ public class PlayerController : NetworkBehaviour
         }
         else
         {
-            // Subscribe to bet amount submission
             PopUpManager.OnBetAmountSubmitted += HandleBetAmountSubmitted;
         }
-    }
-
-    void PopulateChipsList()
-    {
-        totalChips.Clear();
-        blackChips.Clear();
-        redChips.Clear();
-        greenChips.Clear();
-        blueChips.Clear();
-
-        int chipIdCounter = 0;
-
-        Transform chipsParent = transform.Find("Chips");
-        if (chipsParent == null)
-        {
-            Debug.LogError("No 'Chips' object found under the player.");
-            return;
-        }
-
-        // Always process colors in the same order
-        ChipColor[] colorOrder = { ChipColor.black, ChipColor.red, ChipColor.green, ChipColor.blue };
-        foreach (ChipColor color in colorOrder)
-        {
-            Transform colorCategory = chipsParent.Find(color.ToString());
-            if (colorCategory == null) continue;
-
-            // Sort chips by name for deterministic order
-            var chipTransforms = colorCategory.Cast<Transform>()
-                .Where(t => t.CompareTag("chip"))
-                .OrderBy(t => t.name)
-                .ToList();
-
-            foreach (Transform chipTransform in chipTransforms)
-            {
-                ChipModel chip = chipTransform.GetComponent<ChipModel>();
-                if (chip != null)
-                {
-                    chip.chipId = chipIdCounter++; // Assign unique, deterministic ID
-                    totalChips.Add(chip);
-
-                    switch (chip.color)
-                    {
-                        case ChipColor.black: blackChips.Add(chip); break;
-                        case ChipColor.red: redChips.Add(chip); break;
-                        case ChipColor.green: greenChips.Add(chip); break;
-                        case ChipColor.blue: blueChips.Add(chip); break;
-                    }
-                }
-            }
-        }
-
-        Debug.Log($"Chips populated. Total chips: {totalChips.Count}");
     }
 
     void Start()
@@ -712,7 +557,6 @@ public class PlayerController : NetworkBehaviour
         }
 
     }
-
     void InitializeChips()
     {
         foreach (ChipModel chip in totalChips)
@@ -790,7 +634,6 @@ public class PlayerController : NetworkBehaviour
             Act(BetAction.raise, 50);
         }
     }
-
     public void OnReraise(InputAction.CallbackContext context)
     {
         if (context.performed)
