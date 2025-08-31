@@ -12,11 +12,41 @@ public class PlayerCamera : MonoBehaviour
 
     float xRotation;
     float yRotation;
+
+    // Add flag to control camera movement
+    private bool canMoveCamera = true;
+
     // Start is called before the first frame update
     void Start()
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+        // Subscribe to popup state changes
+        PopUpManager.OnPopupStateChanged += HandlePopupStateChanged;
+    }
+
+    private void OnDestroy()
+    {
+        // Unsubscribe to prevent memory leaks
+        PopUpManager.OnPopupStateChanged -= HandlePopupStateChanged;
+    }
+
+    private void HandlePopupStateChanged(bool isPopupOpen)
+    {
+        canMoveCamera = !isPopupOpen;
+
+        // Update cursor state based on popup
+        if (isPopupOpen)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
 
     private void Awake()
@@ -49,14 +79,17 @@ public class PlayerCamera : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        // Only process camera movement if allowed
+        if (!canMoveCamera) return;
+
         float mouseX = Input.GetAxisRaw("Mouse X") * Time.deltaTime * sensX;
-        float mouseY = Input.GetAxisRaw("Mouse Y") * Time.deltaTime* sensY;
+        float mouseY = Input.GetAxisRaw("Mouse Y") * Time.deltaTime * sensY;
 
         yRotation += mouseX;
         xRotation -= mouseY;
 
         // xRotation = Mathf.Clamp(xRotation, -50f, 34f);
-        //yRotation = Mathf.Clamp(yRotation, -60f, 60f);
+        // yRotation = Mathf.Clamp(yRotation, -60f, 60f);
 
         transform.rotation = Quaternion.Euler(xRotation, yRotation, 0);
         orientation.rotation = Quaternion.Euler(0, yRotation, 0);

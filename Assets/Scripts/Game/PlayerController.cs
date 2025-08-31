@@ -14,7 +14,9 @@ public class PlayerController : NetworkBehaviour
     private PlayerInput input;
     public List<ChipModel> totalChips = new List<ChipModel>();
     private RoundModel roundModel;
-
+    private PopUpManager popupManager;
+    private BetAction pendingAction;
+    private int pendingBetAmount = 0;
 
     private List<ChipModel> blackChips = new List<ChipModel>();
     private List<ChipModel> redChips = new List<ChipModel>();
@@ -217,6 +219,14 @@ public class PlayerController : NetworkBehaviour
             }
         }
 
+        if (action == BetAction.raise || action == BetAction.reRaise)
+        {
+            pendingAction = action;
+            pendingBetAmount = newBet; // Default value
+            popupManager.OpenPopup();
+            return; // Don't proceed with action yet
+        }
+
         IPlayerAction playerAction = action switch
         {
             BetAction.check => new CheckAction(currentBet),
@@ -227,8 +237,40 @@ public class PlayerController : NetworkBehaviour
             BetAction.start => new SkipAction(0),
             _ => new SkipAction(currentBet)
         };
-
+       
         roundModel.TryToMakePlayerAction(playerAction);
+    }
+
+    private void HandleBetAmountSubmitted(int betAmount)
+    {
+        if (pendingAction == BetAction.raise || pendingAction == BetAction.reRaise)
+        {
+            // Validate the bet amount
+            int currentHighestBet = roundModel.GetCurrentHighestBet();
+            int requiredToCall = currentHighestBet - currentBet;
+
+            if (betAmount >= requiredToCall && betAmount <= currentBalance)
+            {
+                IPlayerAction playerAction = pendingAction switch
+                {
+                    BetAction.raise => new RaiseAction(betAmount),
+                    BetAction.reRaise => new ReRaiseAction(betAmount),
+                    _ => new SkipAction(currentBet)
+                };
+
+                roundModel.TryToMakePlayerAction(playerAction);
+            }
+            else
+            {
+                // Invalid bet amount, reopen popup
+                Debug.LogWarning($"Invalid bet amount: {betAmount}. Required: {requiredToCall}, Available: {currentBalance}");
+                popupManager.OpenPopup();
+            }
+        }
+
+        // Reset pending action
+        pendingAction = BetAction.start;
+        pendingBetAmount = 0;
     }
 
     public void ClearHand()
@@ -249,12 +291,19 @@ public class PlayerController : NetworkBehaviour
 
         foreach (int chipValue in chipValues)
         {
-            while (bet >= chipValue)
+            while (bet > 0)
             {
                 ChipModel chip = GetChipByValue(chipValue);
                 if (chip != null)
                 {
                     chipsToRemove.Add(chip);
+                    switch (chip.color)
+                    {
+                        case ChipColor.black: blackChips.Remove(chip); break;
+                        case ChipColor.red: redChips.Remove(chip); break;
+                        case ChipColor.green: greenChips.Remove(chip); break;
+                        case ChipColor.blue: blueChips.Remove(chip); break;
+                    }
                     bet -= chipValue;
                 }
                 else
@@ -361,22 +410,18 @@ public class PlayerController : NetworkBehaviour
 
             if (targetParent == null) continue;
 
-            // Get current stack count from actual children (more reliable)
             int stackBase = targetParent.childCount;
             int stackPosition = stackBase;
 
             foreach (var chip in colorGroup.OrderBy(c => c.stackPosition.Value))
             {
-                // Update chip properties
                 chip.stackPosition.Value = stackPosition;
-                chip.ownerClientId.Value = 0; // Bank ownership
+                chip.ownerClientId.Value = 0;
                 chip.networkPosition.Value = new Vector3(0, stackPosition * 0.005f, 0);
                 chip.parentNetworkId.Value = targetParent.GetComponent<NetworkObject>().NetworkObjectId;
 
-                // Move chip on server
                 MoveChipToBank(chip, targetParent, stackPosition);
 
-                // Update all clients
                 UpdateChipPositionClientRpc(chip.chipId, targetParent.GetInstanceID(), stackPosition);
 
                 stackPosition++;
@@ -414,19 +459,9 @@ public class PlayerController : NetworkBehaviour
         chip.transform.SetParent(targetParent);
         chip.transform.localPosition = new Vector3(0, stackPosition * 0.005f, 0);
         chip.transform.localRotation = Quaternion.identity;
-
-        // Remove from player's chip lists
         totalChips.Remove(chip);
-        switch (chip.color)
-        {
-            case ChipColor.black: blackChips.Remove(chip); break;
-            case ChipColor.red: redChips.Remove(chip); break;
-            case ChipColor.green: greenChips.Remove(chip); break;
-            case ChipColor.blue: blueChips.Remove(chip); break;
-        }
 
-        // Update network variables
-        chip.ownerClientId.Value = 0; // 0 could represent "bank" ownership
+        chip.ownerClientId.Value = 0;
         chip.stackPosition.Value = stackPosition;
     }
 
@@ -442,7 +477,6 @@ public class PlayerController : NetworkBehaviour
                 chipBankGreen = chipBank.Find("green");
                 chipBankBlue = chipBank.Find("blue");
 
-                // Clear any existing chips (in case of reinitialization)
                 ClearBank();
             }
         }
@@ -516,7 +550,6 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
-    // --- END NETWORKED CHIP MOVEMENT ---
 
     void PopulateActionTexts()
     {
@@ -595,6 +628,17 @@ public class PlayerController : NetworkBehaviour
 
 
         Debug.Log($"Player {gameObject.name} IsServer={IsServer} IsHost={NetworkManager.Singleton.IsHost} IsClient={IsClient}");
+
+        popupManager = FindObjectOfType<PopUpManager>();
+        if (popupManager is null)
+        {
+            Debug.LogError("popupManager object not found in the scene!");
+        }
+        else
+        {
+            // Subscribe to bet amount submission
+            PopUpManager.OnBetAmountSubmitted += HandleBetAmountSubmitted;
+        }
     }
 
     void PopulateChipsList()
@@ -651,6 +695,8 @@ public class PlayerController : NetworkBehaviour
 
     void Start()
     {
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
         foreach (ChipModel chip in totalChips)
         {
             currentBalance += chip.value;

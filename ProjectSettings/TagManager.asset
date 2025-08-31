@@ -15,6 +15,7 @@ TagManager:
   - table
   - hand_slot
   - chip_bank
+  - canvas
   layers:
   - Default
   - TransparentFX

@@ -14,11 +14,12 @@ public class RoundModel : NetworkBehaviour
     public int minimalBet;
     public BettingController bettingController;
 
-    private int currentBank = 0;
 
     private NetworkVariable<int> currentHighestBet = new NetworkVariable<int>(0);
     private List<PlayerState> playerStates = new List<PlayerState>();
     private List<ChipModel> bankChips = new List<ChipModel>();
+
+    private NetworkVariable<int> currentBank = new NetworkVariable<int>(0);
 
     public override void OnNetworkSpawn()
     {
@@ -144,7 +145,7 @@ public class RoundModel : NetworkBehaviour
 
                     state.currentBalance = player.currentBalance;
                     state.currentBet = bet;
-                    currentBank += additionalBet;
+                    currentBank.Value += additionalBet;
 
                     if (state.currentBet > currentHighestBet.Value)
                         currentHighestBet.Value = state.currentBet;
@@ -152,6 +153,7 @@ public class RoundModel : NetworkBehaviour
             }
         }
 
+        Debug.Log($"Current bank is {currentBank.Value}");
         playerStates[index] = state;
         queueControlBehavior.SwitchTurnToNextPlayer();
         UpdatePlayersState();
