@@ -11,13 +11,13 @@ public class PlayerCameraManager : NetworkBehaviour
     }
     private void Start()
     {
-        if (IsLocalPlayer) // Ensure only the local player has an active camera
+        if (IsLocalPlayer)
         {
-            playerCamera.gameObject.SetActive(true); // Enable the camera for the local player
+            playerCamera.gameObject.SetActive(true);
         }
         else
         {
-            playerCamera.gameObject.SetActive(false); // Disable the camera for remote players
+            playerCamera.gameObject.SetActive(false);
         }
     }
 }

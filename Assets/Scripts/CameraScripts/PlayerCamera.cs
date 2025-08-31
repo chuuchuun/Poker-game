@@ -12,11 +12,36 @@ public class PlayerCamera : MonoBehaviour
 
     float xRotation;
     float yRotation;
-    // Start is called before the first frame update
+
+    private bool canMoveCamera = true;
+
     void Start()
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+        PopUpManager.OnPopupStateChanged += HandlePopupStateChanged;
+    }
+
+    private void OnDestroy()
+    {
+        PopUpManager.OnPopupStateChanged -= HandlePopupStateChanged;
+    }
+
+    private void HandlePopupStateChanged(bool isPopupOpen)
+    {
+        canMoveCamera = !isPopupOpen;
+
+        if (isPopupOpen)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
 
     private void Awake()
@@ -25,20 +50,15 @@ public class PlayerCamera : MonoBehaviour
         {
             Transform[] siblingsAndDescendants = transform.parent.parent.GetComponentsInChildren<Transform>(true);
 
-            // Search for the "Orientation" Transform
             foreach (Transform t in siblingsAndDescendants)
             {
                 if (t.name == "Orientation")
                 {
                     orientation = t;
-                    break; // Stop searching once the target is found
+                    break;
                 }
             }
-
-            if (orientation == null)
-            {
-                Debug.LogError("Orientation Transform not found in parent's children!");
-            }
+            if (orientation is null) Debug.LogError("Orientation Transform not found in parent's children!");
         }
         else
         {
@@ -46,17 +66,15 @@ public class PlayerCamera : MonoBehaviour
         }
     }
 
-    // Update is called once per frame
     void Update()
     {
+        if (!canMoveCamera) return;
+
         float mouseX = Input.GetAxisRaw("Mouse X") * Time.deltaTime * sensX;
-        float mouseY = Input.GetAxisRaw("Mouse Y") * Time.deltaTime* sensY;
+        float mouseY = Input.GetAxisRaw("Mouse Y") * Time.deltaTime * sensY;
 
         yRotation += mouseX;
         xRotation -= mouseY;
-
-        // xRotation = Mathf.Clamp(xRotation, -50f, 34f);
-        //yRotation = Mathf.Clamp(yRotation, -60f, 60f);
 
         transform.rotation = Quaternion.Euler(xRotation, yRotation, 0);
         orientation.rotation = Quaternion.Euler(0, yRotation, 0);

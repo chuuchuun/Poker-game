@@ -24,8 +24,25 @@ public class MatchController : NetworkBehaviour
 
     public void StartRound()
     {
-        RoundModel roundModel = gameObject.GetOrAddComponent<RoundModel>();
-        roundModel.StartGame(players.ToArray(), players[startingPlayer]);
+        if (IsServer)
+        {
+            var roundModel = FindObjectOfType<RoundModel>();
+            if (roundModel != null)
+            {
+                var netObj = roundModel.GetComponent<NetworkObject>();
+                if (netObj == null)
+                {
+                    netObj = roundModel.gameObject.AddComponent<NetworkObject>();
+                }
+                if (!netObj.IsSpawned)
+                {
+                    netObj.Spawn();
+                    Debug.Log("Spawned existing RoundModel");
+                }   
+                roundModel.StartGame(players.ToArray(), players[startingPlayer]);
+
+            }
+        }
     }
 
     public void RoundEnded()

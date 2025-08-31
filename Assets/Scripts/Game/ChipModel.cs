@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 public enum ChipColor
@@ -9,20 +10,15 @@ public enum ChipColor
     green,
     blue
 }
-public class ChipModel : MonoBehaviour
+public class ChipModel : NetworkBehaviour
 {
     public int value;
     public ChipColor color;
-    
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
+    public int chipId;
+    public NetworkVariable<ulong> ownerClientId = new NetworkVariable<ulong>();
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    public NetworkVariable<Vector3> networkPosition = new NetworkVariable<Vector3>();
+    public NetworkVariable<ulong> parentNetworkId = new NetworkVariable<ulong>();
+    public NetworkVariable<int> stackPosition = new NetworkVariable<int>(-1);
+
 }

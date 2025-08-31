@@ -1,41 +1,27 @@
-using System;
 using Unity.Netcode;
 
 public struct NetworkPlayerAction : INetworkSerializable
 {
-    public IPlayerAction Value;
+    public int ActionType;
+    public int BetAmount;
 
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
-        if (serializer.IsReader)
+        serializer.SerializeValue(ref ActionType);
+        serializer.SerializeValue(ref BetAmount);
+    }
+
+    public IPlayerAction ToAction()
+    {
+        return ActionType switch
         {
-            // Read the TypeId
-            int typeId = 0;
-            serializer.SerializeValue(ref typeId);
-
-            // Create the correct action instance
-            Value = typeId switch
-            {
-                0 => new SkipAction(0),
-                1 => new FoldAction(),
-                2 => new CallAction(),
-                3 => new CheckAction(),
-                4 => new RaiseAction(),
-                5 => new ReRaiseAction(),
-                _ => throw new ArgumentException($"Unknown action type: {typeId}")
-            };
-
-            // Deserialize the inner action data
-            Value.NetworkSerialize(serializer);
-        }
-        else
-        {
-            // Write the TypeId
-            int typeId = Value.TypeId;
-            serializer.SerializeValue(ref typeId);
-
-            // Serialize the inner action data
-            Value.NetworkSerialize(serializer);
-        }
+            0 => new SkipAction(0),
+            1 => new FoldAction(BetAmount),
+            2 => new CallAction(BetAmount), 
+            3 => new CheckAction(BetAmount),
+            4 => new RaiseAction(BetAmount),
+            5 => new ReRaiseAction(BetAmount),
+            _ => new SkipAction(0)
+        };
     }
 }
