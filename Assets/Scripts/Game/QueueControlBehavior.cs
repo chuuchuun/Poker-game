@@ -62,7 +62,7 @@ public class QueueControlBehavior : NetworkBehaviour
                 deckControlBehavior.AddCardsToTableServerRpc();
             } else
             {
-                Debug.Log("All cards are dealt");
+
             }
         }
     }

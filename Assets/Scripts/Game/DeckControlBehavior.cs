@@ -114,7 +114,6 @@ public class DeckControlBehavior : NetworkBehaviour
                 break;
         }
 
-        Debug.Log($"Adding cards: {countToDeal}");
         if (countToDeal == 0) return;
         AddCardOnTable(countToDeal);
     }
