@@ -90,8 +90,35 @@ public class DeckControlBehavior : NetworkBehaviour
         }
     }
 
+    public bool CanAddCardsToTable()
+    {
+        return cardsOnTable.Count < 5;
+    }
+
     [ServerRpc]
-    public void AddCardOnTableServerRpc(int cardCount)
+    public void AddCardsToTableServerRpc()
+    {
+        int countToDeal;
+        switch (cardsOnTable.Count)
+        {
+            case 0:
+                countToDeal = 3;
+                break;
+
+            case int n when (n == 3 || n == 4):
+                countToDeal = 1;
+                break;
+
+            default:
+                countToDeal = 0;
+                break;
+        }
+
+        if (countToDeal == 0) return;
+        AddCardOnTable(countToDeal);
+    }
+
+    private void AddCardOnTable(int cardCount)
     {
         if (NetworkManager.IsHost)
         {

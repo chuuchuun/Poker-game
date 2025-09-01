@@ -57,7 +57,13 @@ public class QueueControlBehavior : NetworkBehaviour
 
         if (waitingForTurnOfPlayerWithId == firstPlayerId)
         {
-            deckControlBehavior.AddCardOnTableServerRpc(3);
+            if (deckControlBehavior.CanAddCardsToTable())
+            {
+                deckControlBehavior.AddCardsToTableServerRpc();
+            } else
+            {
+
+            }
         }
     }
 }
