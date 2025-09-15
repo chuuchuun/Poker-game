@@ -18,6 +18,7 @@ public class QueueControlBehavior : NetworkBehaviour
     List<QueuePlayerState> queuedPlayers = new List<QueuePlayerState>();
 
     DeckControlBehavior deckControlBehavior => GameManager.Instance.GetComponent<DeckControlBehavior>();
+    RoundModel roundModel => GameManager.Instance.GetComponent<RoundModel>();
 
     public void SetFirstPlayerToMove(ulong id)
     {
@@ -62,7 +63,7 @@ public class QueueControlBehavior : NetworkBehaviour
                 deckControlBehavior.AddCardsToTableServerRpc();
             } else
             {
-
+                roundModel.EndRound();
             }
         }
     }

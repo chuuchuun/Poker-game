@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -7,11 +8,20 @@ using UnityEngine;
 
 public class RoundModel : NetworkBehaviour
 {
+    private enum RoundStage
+    {
+        PREPARATION,
+        GAME,
+        ENDING
+    }
+
     private QueueControlBehavior queueControlBehavior => GameManager.Instance.GetComponent<QueueControlBehavior>();
     private DeckControlBehavior deckControlBehavior => GameManager.Instance.GetComponent<DeckControlBehavior>();
     private BettingControlBehavior bettingController => GameManager.Instance.GetComponent<BettingControlBehavior>();
 
     private List<PlayerController> playerModels = new List<PlayerController>();
+
+    private RoundStage roundStage = RoundStage.PREPARATION;
 
     public override void OnNetworkSpawn()
     {
@@ -32,8 +42,9 @@ public class RoundModel : NetworkBehaviour
 
     public void StartGame(ulong[] playerIds, ulong firstPlayerId)
     {
-        deckControlBehavior.InitializeDeckAndSlots();
+        roundStage = RoundStage.GAME;
         UpdatePlayers();
+        deckControlBehavior.InitializeDeckAndSlots();
         deckControlBehavior.DealCards(playerModels);
 
         queueControlBehavior.SetFirstPlayerToMove(firstPlayerId);
@@ -52,6 +63,36 @@ public class RoundModel : NetworkBehaviour
                 Debug.Log("New player added: " + player.name);
             }
         }
+    }
+
+    public void EndRound()
+    {
+        if (roundStage != RoundStage.GAME) return;
+        roundStage = RoundStage.ENDING;
+        Debug.Log("Round ended");
+
+        StartCoroutine(Delay(5, () =>
+        {
+            Debug.Log("Round started");
+            deckControlBehavior.CollectAllCards();
+            roundStage = RoundStage.PREPARATION;
+
+            StartCoroutine(Delay(5, () =>
+            {
+                roundStage = RoundStage.GAME;
+                UpdatePlayers();
+                deckControlBehavior.InitializeDeckAndSlots();
+                deckControlBehavior.DealCards(playerModels);
+
+                bettingController.InitializeBetting(playerModels);
+            }));
+        }));
+    }
+
+    private IEnumerator Delay(int seconds, Action code)
+    {
+        yield return new WaitForSeconds(10);
+        code();
     }
 
     public void TryToMakePlayerAction(IPlayerAction action)
@@ -76,6 +117,7 @@ public class RoundModel : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     private void SubmitPlayerActionServerRpc(NetworkPlayerAction networkAction, ServerRpcParams rpcParams = default)
     {
+        if (roundStage != RoundStage.GAME) return;
         ulong senderId = rpcParams.Receive.SenderClientId;
         IPlayerAction action = networkAction.ToAction();
 
@@ -96,6 +138,7 @@ public class RoundModel : NetworkBehaviour
 
     private void ProcessPlayerAction(ulong playerId, IPlayerAction action)
     {
+        if (roundStage != RoundStage.GAME) return;
         Debug.Log($"[RoundModel] Processing {action.GetType().Name} for player {playerId}");
 
         if (!queueControlBehavior.ShouldAcceptActionFromPlayerWithId(playerId)) return;
