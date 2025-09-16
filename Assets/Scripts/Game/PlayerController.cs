@@ -277,6 +277,8 @@ public class PlayerController : NetworkBehaviour
         {
             deckControl.ReturnCard(card);
         }
+
+        cardsInHand.Clear();
     }
 
     public List<ChipModel> RemoveChip(int bet)
