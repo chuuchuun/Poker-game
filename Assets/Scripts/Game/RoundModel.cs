@@ -44,7 +44,6 @@ public class RoundModel : NetworkBehaviour
     {
         roundStage = RoundStage.GAME;
         UpdatePlayers();
-        deckControlBehavior.InitializeDeckAndSlots();
         deckControlBehavior.DealCards(playerModels);
 
         queueControlBehavior.SetFirstPlayerToMove(firstPlayerId);
@@ -81,7 +80,6 @@ public class RoundModel : NetworkBehaviour
             {
                 roundStage = RoundStage.GAME;
                 UpdatePlayers();
-                deckControlBehavior.InitializeDeckAndSlots();
                 deckControlBehavior.DealCards(playerModels);
 
                 bettingController.InitializeBetting(playerModels);
