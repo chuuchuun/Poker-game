@@ -6181,7 +6181,7 @@ GameObject:
   - component: {fileID: 1178592475}
   m_Layer: 0
   m_Name: Deck
-  m_TagString: Untagged
+  m_TagString: deck
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0

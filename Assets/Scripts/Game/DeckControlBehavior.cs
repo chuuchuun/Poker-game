@@ -10,6 +10,7 @@ public class DeckControlBehavior : NetworkBehaviour
     private List<CardModel> deck = new List<CardModel>();
     private GameObject[] cardSlots;
     private GameObject[] foldSlots;
+    private PlayerController[] players;
 
     private void Awake()
     {
@@ -47,12 +48,16 @@ public class DeckControlBehavior : NetworkBehaviour
 
     public void DealCards(List<PlayerController> playerModels)
     {
+        players = playerModels.ToArray();
+
         foreach (var player in playerModels.Where(p => p.IsSpawned))
         {
             DealToPlayersServerRpc(
                 new NetworkObjectReference(player.GetComponent<NetworkObject>())
             );
         }
+
+        SyncDeckWithClients();
     }
 
     [ServerRpc]
@@ -83,10 +88,27 @@ public class DeckControlBehavior : NetworkBehaviour
             cardObject.transform.position = slot.position;
             cardObject.transform.rotation = Quaternion.Euler(0, 180f, 0);
         }
+    }
 
-        foreach (var card in dealtCards)
+    public void CollectAllCards()
+    {
+        deck.Clear();
+        CardModel[] allCards = FindObjectsOfType<CardModel>();
+        GameObject deckObject = GameObject.FindGameObjectWithTag("deck");
+        for (int i = 0; i < allCards.Length; i++)
         {
-            MoveCardToPlayerClientRpc(playerNetwork, new NetworkObjectReference(card.GetComponent<NetworkObject>()));
+            CardModel card = allCards[i];
+            deck.Add(card);
+            card.gameObject.transform.SetParent(deckObject.transform);
+            card.gameObject.transform.SetLocalPositionAndRotation(
+                new Vector3(0, 0.001f * i, 0),
+                Quaternion.Euler(90f, 0, 0)
+            );
+        }
+
+        foreach (PlayerController player in players)
+        {
+            player.cardsInHand.Clear();
         }
     }
 
@@ -148,8 +170,6 @@ public class DeckControlBehavior : NetworkBehaviour
                         break;
                     }
                 }
-
-                AddCardToTableClientRpc(new NetworkObjectReference(randomCard.gameObject.GetComponent<NetworkObject>()));
             }
         }
     }
@@ -182,12 +202,6 @@ public class DeckControlBehavior : NetworkBehaviour
         }
     }
 
-    [ClientRpc]
-    private void AddCardToTableClientRpc(NetworkObjectReference cardNetwork)
-    {
-        
-    }
-
     private CardModel DrawRandomCard()
     {
         if (deck.Count == 0) return null;
@@ -197,8 +211,39 @@ public class DeckControlBehavior : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void MoveCardToPlayerClientRpc(NetworkObjectReference playerNetwork, NetworkObjectReference cardNetwork)
+    public void UpdateDeckTransformClientRpc(Vector3[] positions, Quaternion[] rotations)
     {
-        
+        if (IsServer) return;
+
+        CardModel[] allCards = FindObjectsOfType<CardModel>();
+        GameObject deckObject = GameObject.FindGameObjectWithTag("deck");
+
+        for (int i = 0; i < allCards.Length; i++)
+        {
+            if (i < positions.Length && i < rotations.Length)
+            {
+                CardModel card = allCards[i];
+                card.gameObject.transform.SetParent(deckObject.transform);
+                card.gameObject.transform.SetLocalPositionAndRotation(positions[i], rotations[i]);
+            }
+        }
+    }
+
+    public void SyncDeckWithClients()
+    {
+        if (IsServer)
+        {
+            CardModel[] allCards = FindObjectsOfType<CardModel>();
+            Vector3[] positions = new Vector3[allCards.Length];
+            Quaternion[] rotations = new Quaternion[allCards.Length];
+
+            for (int i = 0; i < allCards.Length; i++)
+            {
+                positions[i] = allCards[i].transform.localPosition;
+                rotations[i] = allCards[i].transform.localRotation;
+            }
+
+            UpdateDeckTransformClientRpc(positions, rotations);
+        }
     }
 }
