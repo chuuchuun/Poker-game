@@ -72,6 +72,19 @@ public class RoundModel : NetworkBehaviour
 
         StartCoroutine(Delay(5, () =>
         {
+            List<CardModel> tableCards = deckControlBehavior.GetCardsOnTable();
+            List<(ulong, List<CardModel>)> playerHands = playerModels
+            .Select(model => 
+                (model.playerId, model.cardsInHand)
+            ).ToList();
+
+            List<ulong> winners = HandEvaluator.GetWinners(playerHands, tableCards);
+            winners.ForEach(winner => {
+                bettingController.DistributeWinnings(
+                    winner, 
+                    bettingController.GetCurrentBank() / winners.Count()
+                );
+            });
             Debug.Log("Round started");
             deckControlBehavior.CollectAllCards();
             roundStage = RoundStage.PREPARATION;

@@ -10,7 +10,7 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : NetworkBehaviour
 {
-    private ulong userID;
+    public ulong playerId;
     private PlayerInput input;
     public List<ChipModel> totalChips = new List<ChipModel>();
     private RoundModel roundModel;
@@ -53,6 +53,7 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        playerId = OwnerClientId;
         if (!IsOwner)
         {
             gameObject.SetActive(true);
