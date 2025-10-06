@@ -658,8 +658,16 @@ public class PlayerController : NetworkBehaviour
         {
             Debug.LogError("RoundModel exists but isn't spawned!");
         }
-
+        if (!IsOwner)
+        {
+            AudioListener listener = GetComponent<AudioListener>();
+            if (listener != null)
+            {
+                listener.enabled = false;
+            }
+        }
     }
+
     void InitializeChips()
     {
         foreach (ChipModel chip in totalChips)
@@ -742,6 +750,17 @@ public class PlayerController : NetworkBehaviour
         if (context.performed)
         {
             Act(BetAction.reRaise, 100);
+        }
+    }
+
+    public void OnExit (InputAction.CallbackContext context)
+    {
+        Debug.Log("Exit action triggered");
+
+        if (context.performed)
+        {
+            if (UIGameController.Instance != null)
+                UIGameController.Instance.ToggleSettingsMenuVisibility();
         }
     }
 }

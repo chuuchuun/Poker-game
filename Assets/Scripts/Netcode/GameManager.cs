@@ -137,4 +137,37 @@ public class GameManager : NetworkBehaviour
         ClearHand(clientId);
         ResetSpawnPoint(clientId);
     }
+    public void DisconnectClient(ulong clientId)
+    {
+        if (!IsServer) return;
+
+        Debug.Log($"Disconnecting and despawning client {clientId}");
+
+        ClearHand(clientId);
+        ResetSpawnPoint(clientId);
+
+        NetworkObject playerObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(clientId);
+        if (playerObj != null && playerObj.IsSpawned)
+        {
+            foreach (NetworkObject child in playerObj.GetComponentsInChildren<NetworkObject>())
+            {
+                if (child != playerObj && child.IsSpawned)
+                {
+                    child.Despawn(true);
+                    Debug.Log($"Despawned child object: {child.name}");
+                }
+            }
+
+            playerObj.Despawn(true);
+            Debug.Log($"Player {clientId} and child objects despawned.");
+        }
+        else
+        {
+            Debug.LogWarning($"Player object for client {clientId} not found or already despawned");
+        }
+
+        NetworkManager.Singleton.DisconnectClient(clientId);
+        Debug.Log($"Client {clientId} disconnected from server.");
+    }
+
 }
