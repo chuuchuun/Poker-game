@@ -35,7 +35,7 @@ public class BettingControlBehavior : NetworkBehaviour
             {
                 id = player.OwnerClientId,
                 currentBet = 0,
-                currentBalance = player.currentBalance,
+                currentBalance = player.CurrentBalance,
                 hasFolded = false
             });
         }
@@ -74,13 +74,13 @@ public class BettingControlBehavior : NetworkBehaviour
 
         if (action.TypeId == 2)
         {
-            if (requiredToCall <= player.currentBalance)
+            if (requiredToCall <= player.CurrentBalance)
             {
                 var movedChips = player.RemoveChip(requiredToCall);
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
-                    state.currentBalance = player.currentBalance;
+                    state.currentBalance = player.CurrentBalance;
                     state.currentBet = currentHighestBet.Value;
                     playerStates[index] = state;
                     currentBank.Value += requiredToCall;
@@ -93,13 +93,13 @@ public class BettingControlBehavior : NetworkBehaviour
         if ((action.TypeId == 4 || action.TypeId == 5) && action.NewBet >= requiredToCall)
         {
             int additionalBet = action.NewBet - state.currentBet;
-            if (additionalBet <= player.currentBalance)
+            if (additionalBet <= player.CurrentBalance)
             {
                 var movedChips = player.RemoveChip(additionalBet);
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
-                    state.currentBalance = player.currentBalance;
+                    state.currentBalance = player.CurrentBalance;
                     state.currentBet = action.NewBet;
                     playerStates[index] = state;
                     currentBank.Value += additionalBet;
@@ -125,7 +125,7 @@ public class BettingControlBehavior : NetworkBehaviour
             {
                 id = playerId,
                 currentBet = player.currentBet,
-                currentBalance = player.currentBalance,
+                currentBalance = player.CurrentBalance,
                 hasFolded = playersFolded.Contains(player)
             });
         }
@@ -133,7 +133,7 @@ public class BettingControlBehavior : NetworkBehaviour
         {
             var state = playerStates[index];
             state.currentBet = player.currentBet;
-            state.currentBalance = player.currentBalance;
+            state.currentBalance = player.CurrentBalance;
             state.hasFolded = playersFolded.Contains(player);
             playerStates[index] = state;
         }
@@ -183,18 +183,33 @@ public class BettingControlBehavior : NetworkBehaviour
         var winner = playerControllers.FirstOrDefault(p => p.OwnerClientId == winnerId);
         if (winner != null)
         {
-            winner.currentBalance += amount;
+            winner.CurrentBalance += amount;
 
             var index = FindPlayerStateIndex(winnerId);
             if (index != -1)
             {
                 var state = playerStates[index];
-                state.currentBalance = winner.currentBalance;
+                state.currentBalance = winner.CurrentBalance;
                 playerStates[index] = state;
             }
         }
+        ClearBank();
         currentBank.Value = 0;
+
     }
+
+    private void ClearBank()
+    {
+        foreach (var chip in bankChips)
+        {
+            if (chip != null && chip.NetworkObject != null && chip.NetworkObject.IsSpawned)
+            {
+                chip.NetworkObject.Despawn(true);
+            }
+        }
+        bankChips.Clear();
+    }
+
 
     private int FindPlayerStateIndex(ulong playerId)
     {

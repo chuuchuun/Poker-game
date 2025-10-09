@@ -2150,6 +2150,7 @@ GameObject:
   - component: {fileID: 3148567107051518674}
   - component: {fileID: -6678214953943697125}
   - component: {fileID: 1009342074831214439}
+  - component: {fileID: 8767585017555864213}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2237,7 +2238,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 3536297955
+  GlobalObjectIdHash: 3749809545
   InScenePlacedSourceGlobalObjectIdHash: 3749809545
   AlwaysReplicateAsRoot: 1
   SynchronizeTransform: 1
@@ -2258,8 +2259,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2e316057723ddad4e9cf9cc8f5b530e1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  playerId: 0
   totalChips: []
-  currentBalance: 0
   currentBet: 0
   cardsInHand: []
   cardSlots: []
@@ -2423,7 +2424,19 @@ MonoBehaviour:
     m_ActionId: 6841fa37-c75b-4ba8-b83b-89cbe508233d
     m_ActionName: Player/Reraise[/Keyboard/s]
   - m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 796040663478448977}
+        m_TargetAssemblyTypeName: PlayerController, Assembly-CSharp
+        m_MethodName: OnExit
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
     m_ActionId: 0e5fcded-b5e1-41c6-a468-51002f4827b4
     m_ActionName: Player/Exit[/Keyboard/escape]
   - m_PersistentCalls:
@@ -2442,6 +2455,10 @@ MonoBehaviour:
         m_CallState: 1
     m_ActionId: ccb105f9-faac-40bc-b602-7b44fe084472
     m_ActionName: Player/Start[/Keyboard/space]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 5b33910b-e681-40c8-a3ad-f6808e78bf1e
+    m_ActionName: UI/Exit[/Keyboard/backquote]
   m_NeverAutoSwitchControlSchemes: 0
   m_DefaultControlScheme: Keyboard&Mouse
   m_DefaultActionMap: Player
@@ -2491,6 +2508,14 @@ MonoBehaviour:
   InLocalSpace: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!81 &8767585017555864213
+AudioListener:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7892131989823861977}
+  m_Enabled: 1
 --- !u!1 &8132357991945336338
 GameObject:
   m_ObjectHideFlags: 0

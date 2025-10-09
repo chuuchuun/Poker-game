@@ -15,41 +15,11 @@ public class PlayerCamera : MonoBehaviour
 
     private bool canMoveCamera = true;
 
-    void Start()
-    {
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
-
-        PopUpManager.OnPopupStateChanged += HandlePopupStateChanged;
-    }
-
-    private void OnDestroy()
-    {
-        PopUpManager.OnPopupStateChanged -= HandlePopupStateChanged;
-    }
-
-    private void HandlePopupStateChanged(bool isPopupOpen)
-    {
-        canMoveCamera = !isPopupOpen;
-
-        if (isPopupOpen)
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
-        else
-        {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        }
-    }
-
-    private void Awake()
+    void Awake()
     {
         if (transform.parent != null)
         {
             Transform[] siblingsAndDescendants = transform.parent.parent.GetComponentsInChildren<Transform>(true);
-
             foreach (Transform t in siblingsAndDescendants)
             {
                 if (t.name == "Orientation")
@@ -64,6 +34,29 @@ public class PlayerCamera : MonoBehaviour
         {
             Debug.LogError("This object does not have a parent!");
         }
+    }
+
+    void Start()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        PopUpManager.OnPopupStateChanged += HandleUIStateChanged;
+        SettingsMenuController.OnMenuStateChanged += HandleUIStateChanged;
+    }
+
+    private void OnDestroy()
+    {
+        PopUpManager.OnPopupStateChanged -= HandleUIStateChanged;
+        SettingsMenuController.OnMenuStateChanged -= HandleUIStateChanged;
+    }
+
+    private void HandleUIStateChanged(bool isUIOpen)
+    {
+        canMoveCamera = !isUIOpen;
+
+        Cursor.lockState = isUIOpen ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = isUIOpen;
     }
 
     void Update()

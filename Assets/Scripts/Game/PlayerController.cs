@@ -10,7 +10,7 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : NetworkBehaviour
 {
-    private ulong userID;
+    public ulong playerId;
     private PlayerInput input;
     public List<ChipModel> totalChips = new List<ChipModel>();
     private RoundModel roundModel;
@@ -29,7 +29,31 @@ public class PlayerController : NetworkBehaviour
     private Transform chipBankGreen;
     private Transform chipBankBlue;
 
-    public int currentBalance = 200;
+    private int currentBalance = 200;
+    public int CurrentBalance
+    {
+        get => currentBalance;
+        set
+        {
+            if (currentBalance != value)
+            {
+                int delta = value - currentBalance;
+
+                currentBalance = value;
+
+                if (delta > 0)
+                {
+                    AddChipsServerRpc(delta);
+                }
+
+                OnBalanceChanged?.Invoke(currentBalance);
+            }
+        }
+    }
+
+
+    public event Action<int> OnBalanceChanged;
+
     public int currentBet = 0;
     public List<CardModel> cardsInHand = new List<CardModel>();
     public List<Transform> cardSlots = new List<Transform>();
@@ -53,6 +77,7 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        playerId = OwnerClientId;
         if (!IsOwner)
         {
             gameObject.SetActive(true);
@@ -483,6 +508,76 @@ public class PlayerController : NetworkBehaviour
         ResetActionText();
     }
 
+    [ServerRpc(RequireOwnership = false)]
+    public void AddChipsServerRpc(int amount)
+    {
+        if (!IsServer) return;
+
+        int[] chipValues = new int[] { 25, 10, 5, 1 };
+
+        foreach (int chipValue in chipValues)
+        {
+            while (amount >= chipValue)
+            {
+                SpawnChips(GetColorForValue(chipValue), chipValue, 1, GetPrefabForValue(chipValue));
+                amount -= chipValue;
+            }
+        }
+        currentBalance = totalChips.Sum(c => c.value);
+        OnBalanceChanged?.Invoke(currentBalance);
+    }
+
+    public void AddChipsFromBank(List<ChipModel> chips)
+    {
+        foreach (var chip in chips)
+        {
+            chip.ownerClientId.Value = OwnerClientId;
+            totalChips.Add(chip);
+
+            switch (chip.color)
+            {
+                case ChipColor.black: blackChips.Add(chip); break;
+                case ChipColor.red: redChips.Add(chip); break;
+                case ChipColor.green: greenChips.Add(chip); break;
+                case ChipColor.blue: blueChips.Add(chip); break;
+            }
+
+            currentBalance += chip.value;
+
+            Transform targetParent = transform.Find("Chips/" + chip.color.ToString());
+            chip.transform.SetParent(targetParent);
+            chip.transform.localPosition = new Vector3(0, targetParent.childCount * 0.005f, 0);
+            chip.transform.localRotation = Quaternion.identity;
+        }
+
+        Debug.Log($"Player {OwnerClientId} received {chips.Count} chips. New balance: {currentBalance}");
+    }
+
+    private ChipColor GetColorForValue(int value)
+    {
+        return value switch
+        {
+            25 => ChipColor.black,
+            10 => ChipColor.red,
+            5 => ChipColor.green,
+            1 => ChipColor.blue,
+            _ => ChipColor.blue
+        };
+    }
+
+    private GameObject GetPrefabForValue(int value)
+    {
+        return value switch
+        {
+            25 => chipPrefabBlack,
+            10 => chipPrefabRed,
+            5 => chipPrefabGreen,
+            1 => chipPrefabBlue,
+            _ => chipPrefabBlue
+        };
+    }
+
+
     void ResetActionText()
     {
         callText.enabled = false;
@@ -494,6 +589,12 @@ public class PlayerController : NetworkBehaviour
 
     private void Awake()
     {
+        OnBalanceChanged += balance =>
+        {
+            Debug.Log($"Balance updated to {balance}");
+           
+        };
+
         List<Transform> children = gameObject.GetComponentsInChildren<Transform>().ToList();
         foreach (Transform transform in children)
         {
@@ -557,8 +658,16 @@ public class PlayerController : NetworkBehaviour
         {
             Debug.LogError("RoundModel exists but isn't spawned!");
         }
-
+        if (!IsOwner)
+        {
+            AudioListener listener = GetComponent<AudioListener>();
+            if (listener != null)
+            {
+                listener.enabled = false;
+            }
+        }
     }
+
     void InitializeChips()
     {
         foreach (ChipModel chip in totalChips)
@@ -641,6 +750,17 @@ public class PlayerController : NetworkBehaviour
         if (context.performed)
         {
             Act(BetAction.reRaise, 100);
+        }
+    }
+
+    public void OnExit (InputAction.CallbackContext context)
+    {
+        Debug.Log("Exit action triggered");
+
+        if (context.performed)
+        {
+            if (UIGameController.Instance != null)
+                UIGameController.Instance.ToggleSettingsMenuVisibility();
         }
     }
 }

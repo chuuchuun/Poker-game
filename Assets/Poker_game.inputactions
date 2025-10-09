@@ -170,7 +170,7 @@
                 {
                     "name": "",
                     "id": "04299663-d8f0-4a55-94c4-2f83d43e07e1",
-                    "path": "<Keyboard>/escape",
+                    "path": "<Keyboard>/backquote",
                     "interactions": "",
                     "processors": "",
                     "groups": "Keyboard&Mouse",
@@ -281,6 +281,15 @@
                     "type": "PassThrough",
                     "id": "551b57af-afac-41b4-80c8-1803e5c8a70c",
                     "expectedControlType": "Quaternion",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Exit",
+                    "type": "Button",
+                    "id": "5b33910b-e681-40c8-a3ad-f6808e78bf1e",
+                    "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
@@ -702,6 +711,17 @@
                     "processors": "",
                     "groups": "XR",
                     "action": "TrackedDeviceOrientation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "d493e4c6-3266-442c-81c2-e2c42134738f",
+                    "path": "<Keyboard>/backquote",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Exit",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

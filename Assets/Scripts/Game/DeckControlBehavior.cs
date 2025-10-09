@@ -44,6 +44,25 @@ public class DeckControlBehavior : NetworkBehaviour
         CollectAllCardsServerRpc();
     }
 
+    public List<CardModel> GetCardsOnTable()
+    {
+        List<CardModel> deckCards = new List<CardModel>();
+
+        foreach (var cardRef in cardsOnTable)
+        {
+            if (cardRef.TryGet(out NetworkObject netObj))
+            {
+                CardModel card = netObj.GetComponent<CardModel>();
+                if (card != null)
+                {
+                    deckCards.Add(card);
+                }
+            }
+        }
+
+        return deckCards;
+    }
+
     public void InitializeDeckAndSlots()
     {
         if (!IsServer) return;
@@ -110,7 +129,6 @@ public class DeckControlBehavior : NetworkBehaviour
                 player.cardsInHand.Add(card);
                 deck.Remove(cardRef);
 
-                // Update card position on all clients
                 UpdateCardPositionClientRpc(
                     cardRef,
                     new NetworkObjectReference(player.NetworkObject),
