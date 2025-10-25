@@ -1,16 +1,26 @@
 using Unity.Netcode;
 
+public enum ActionType
+{
+    SKIP,
+    FOLD,
+    CALL,
+    CHECK,
+    RAISE,
+    RERAISE
+}
+
 public interface IPlayerAction : INetworkSerializable
 {
     int NewBet { get; }
     bool HasFolded { get; }
-    int TypeId { get; }
+    ActionType TypeId { get; }
 }
 
 public class SkipAction : IPlayerAction
 {
     private int currentBet;
-    public int TypeId => 0;
+    public ActionType TypeId => ActionType.SKIP;
 
     public SkipAction(int currentBet)
     {
@@ -30,7 +40,7 @@ public class FoldAction : IPlayerAction
 {
     private int currentBet;
 
-    public int TypeId => 1;
+    public ActionType TypeId => ActionType.FOLD;
     public int NewBet => currentBet;
     public bool HasFolded => true;
 
@@ -50,7 +60,7 @@ public class CallAction : IPlayerAction
 {
     private int callAmount;
 
-    public int TypeId => 2;
+    public ActionType TypeId => ActionType.CALL;
     public int NewBet => callAmount;
     public bool HasFolded => false;
 
@@ -70,7 +80,7 @@ public class CheckAction : IPlayerAction
 {
     private int currentBet;
 
-    public int TypeId => 3;
+    public ActionType TypeId => ActionType.CHECK;
     public int NewBet => currentBet;
     public bool HasFolded => false;
 
@@ -90,7 +100,7 @@ public class RaiseAction : IPlayerAction
 {
     private int raiseTo;
 
-    public int TypeId => 4;
+    public ActionType TypeId => ActionType.RAISE;
     public int NewBet => raiseTo;
     public bool HasFolded => false;
 
@@ -110,7 +120,7 @@ public class ReRaiseAction : IPlayerAction
 {
     private int reRaiseTo;
 
-    public int TypeId => 5;
+    public ActionType TypeId => ActionType.RERAISE;
     public int NewBet => reRaiseTo;
     public bool HasFolded => false;
 
