@@ -140,7 +140,7 @@ public class RoundModel : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void PlayerActionProcessedClientRpc(ulong playerId, int actionType, int betAmount, NetworkPlayerAction networkAction)
+    private void PlayerActionProcessedClientRpc(ulong playerId, ActionType actionType, int betAmount, NetworkPlayerAction networkAction)
     {
         Debug.Log($"[CLIENT] Player {playerId} made action={actionType}, bet={betAmount}");
         IPlayerAction action = networkAction.ToAction();

@@ -9,18 +9,18 @@ public class BettingControlBehavior : NetworkBehaviour
     private List<PlayerController> playerControllers = new List<PlayerController>();
     public List<PlayerController> playersFolded = new List<PlayerController>();
 
-    private NetworkVariable<int> currentHighestBet = new NetworkVariable<int>(0);
-    private NetworkVariable<int> currentBank = new NetworkVariable<int>(0);
+    private int currentHighestBet = 0;
+    private int currentBank = 0;
     private List<ChipModel> bankChips = new List<ChipModel>();
 
-    private NetworkList<PlayerState> playerStates;
+    private List<PlayerState> playerStates;
 
     private void Awake()
     {
-        playerStates = new NetworkList<PlayerState>();
+        playerStates = new List<PlayerState>();
     }
 
-    public int GetCurrentHighestBet() => currentHighestBet.Value;
+    public int GetCurrentHighestBet() => currentHighestBet;
 
     public void InitializeBetting(List<PlayerController> players)
     {
@@ -40,8 +40,8 @@ public class BettingControlBehavior : NetworkBehaviour
             });
         }
 
-        currentHighestBet.Value = 0;
-        currentBank.Value = 0;
+        currentHighestBet = 0;
+        currentBank = 0;
         bankChips.Clear();
     }
 
@@ -61,9 +61,9 @@ public class BettingControlBehavior : NetworkBehaviour
             return true;
         }
 
-        int requiredToCall = currentHighestBet.Value - state.currentBet;
+        int requiredToCall = currentHighestBet - state.currentBet;
 
-        if (action.TypeId == 3)
+        if (action.TypeId == ActionType.CHECK)
         {
             if (requiredToCall == 0)
             {
@@ -72,7 +72,7 @@ public class BettingControlBehavior : NetworkBehaviour
             return false;
         }
 
-        if (action.TypeId == 2)
+        if (action.TypeId == ActionType.CALL)
         {
             if (requiredToCall <= player.CurrentBalance)
             {
@@ -80,38 +80,41 @@ public class BettingControlBehavior : NetworkBehaviour
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
+                    player.CurrentBalance -= requiredToCall;
+                    player.currentBet += requiredToCall;
                     state.currentBalance = player.CurrentBalance;
-                    state.currentBet = currentHighestBet.Value;
+                    state.currentBet = currentHighestBet;
                     playerStates[index] = state;
-                    currentBank.Value += requiredToCall;
+                    currentBank += requiredToCall;
                     return true;
                 }
             }
             return false;
         }
 
-        if ((action.TypeId == 4 || action.TypeId == 5) && action.NewBet >= requiredToCall)
+        if ((action.TypeId == ActionType.RAISE || action.TypeId == ActionType.RERAISE) && action.NewBet >= requiredToCall)
         {
-            int additionalBet = action.NewBet - state.currentBet;
-            if (additionalBet <= player.CurrentBalance)
+            if (action.NewBet <= player.CurrentBalance)
             {
-                var movedChips = player.RemoveChip(additionalBet);
+                var movedChips = player.RemoveChip(action.NewBet);
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
+                    player.CurrentBalance -= action.NewBet;
+                    player.currentBet += action.NewBet;
                     state.currentBalance = player.CurrentBalance;
-                    state.currentBet = action.NewBet;
+                    state.currentBet += action.NewBet;
                     playerStates[index] = state;
-                    currentBank.Value += additionalBet;
+                    currentBank += action.NewBet;
 
-                    if (state.currentBet > currentHighestBet.Value)
-                        currentHighestBet.Value = state.currentBet;
+                    currentHighestBet = state.currentBet;
 
                     return true;
                 }
             }
         }
         return false;
+
     }
 
     public void UpdatePlayerState(PlayerController player)
@@ -165,7 +168,7 @@ public class BettingControlBehavior : NetworkBehaviour
 
     public void ResetForNewRound()
     {
-        currentHighestBet.Value = 0;
+        currentHighestBet = 0;
 
         for (int i = 0; i < playerStates.Count; i++)
         {
@@ -173,6 +176,10 @@ public class BettingControlBehavior : NetworkBehaviour
             state.currentBet = 0;
             state.hasFolded = false;
             playerStates[i] = state;
+        }
+
+        foreach (var player in playerControllers) {
+            player.currentBet = 0;
         }
 
         playersFolded.Clear();
@@ -194,7 +201,7 @@ public class BettingControlBehavior : NetworkBehaviour
             }
         }
         ClearBank();
-        currentBank.Value = 0;
+        currentBank = 0;
 
     }
 
@@ -223,7 +230,7 @@ public class BettingControlBehavior : NetworkBehaviour
 
     public int GetCurrentBank()
     {
-        return currentBank.Value;
+        return currentBank;
     }
 
     public List<PlayerState> GetAllPlayerStates()

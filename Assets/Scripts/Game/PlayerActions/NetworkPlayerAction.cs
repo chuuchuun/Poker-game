@@ -2,7 +2,7 @@ using Unity.Netcode;
 
 public struct NetworkPlayerAction : INetworkSerializable
 {
-    public int ActionType;
+    public ActionType ActionType;
     public int BetAmount;
 
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
@@ -15,12 +15,12 @@ public struct NetworkPlayerAction : INetworkSerializable
     {
         return ActionType switch
         {
-            0 => new SkipAction(0),
-            1 => new FoldAction(BetAmount),
-            2 => new CallAction(BetAmount), 
-            3 => new CheckAction(BetAmount),
-            4 => new RaiseAction(BetAmount),
-            5 => new ReRaiseAction(BetAmount),
+            ActionType.SKIP => new SkipAction(0),
+            ActionType.FOLD => new FoldAction(BetAmount),
+            ActionType.CALL => new CallAction(BetAmount),
+            ActionType.CHECK => new CheckAction(BetAmount),
+            ActionType.RAISE => new RaiseAction(BetAmount),
+            ActionType.RERAISE => new ReRaiseAction(BetAmount),
             _ => new SkipAction(0)
         };
     }
