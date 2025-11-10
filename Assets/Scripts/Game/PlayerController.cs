@@ -29,7 +29,10 @@ public class PlayerController : NetworkBehaviour
     private Transform chipBankGreen;
     private Transform chipBankBlue;
 
-    private int currentBalance = 200;
+    private BalanceCanvasController balanceCanvasController;
+
+
+    [SerializeField] private int currentBalance = 0;
     public int CurrentBalance
     {
         get => currentBalance;
@@ -38,8 +41,13 @@ public class PlayerController : NetworkBehaviour
             if (currentBalance != value)
             {
                 int delta = value - currentBalance;
-
                 currentBalance = value;
+
+                if (IsServer)
+                {
+                    networkBalance.Value = currentBalance;
+                    UpdateBalanceClientRpc(currentBalance);
+                }
 
                 if (delta > 0)
                 {
@@ -50,7 +58,6 @@ public class PlayerController : NetworkBehaviour
             }
         }
     }
-
 
     public event Action<int> OnBalanceChanged;
 
@@ -68,27 +75,47 @@ public class PlayerController : NetworkBehaviour
     private int spawnIndex = -1;
     private int chipCounter = 0;
     public NetworkVariable<bool> isMyTurn = new NetworkVariable<bool>();
-
+    public NetworkVariable<int> networkBalance = new NetworkVariable<int>(0,
+    NetworkVariableReadPermission.Everyone,
+    NetworkVariableWritePermission.Server);
 
     [SerializeField] private GameObject chipPrefabBlack;
     [SerializeField] private GameObject chipPrefabRed;
     [SerializeField] private GameObject chipPrefabGreen;
     [SerializeField] private GameObject chipPrefabBlue;
-
+    [SerializeField] private GameObject balancePrefab;
     public override void OnNetworkSpawn()
     {
         playerId = OwnerClientId;
+
+        Debug.Log($"Player {OwnerClientId} spawned - IsServer: {IsServer}, IsHost: {IsHost}, IsOwner: {IsOwner}");
+
+        networkBalance.OnValueChanged += OnNetworkBalanceChanged;
+
         if (!IsOwner)
         {
             gameObject.SetActive(true);
         }
+
         if (IsServer)
         {
+            Debug.Log($"Server assigning chips to player {OwnerClientId}");
             AssignChipsToPlayer();
         }
         else
         {
+            Debug.Log($"Client {OwnerClientId} waiting to find chips");
             Invoke(nameof(FindMyChips), 0.5f);
+        }
+    }
+
+    private void OnNetworkBalanceChanged(int oldValue, int newValue)
+    {
+        if (!IsServer)
+        {
+            Debug.Log($"Client {OwnerClientId} received network balance update: {oldValue} -> {newValue}");
+            currentBalance = newValue;
+            OnBalanceChanged?.Invoke(newValue);
         }
     }
 
@@ -121,10 +148,28 @@ public class PlayerController : NetworkBehaviour
 
     private void AssignChipsToPlayer()
     {
+        Debug.Log($"Assigning chips to player {OwnerClientId} - Current balance: {currentBalance}");
+
+        totalChips.Clear();
+        blackChips.Clear();
+        redChips.Clear();
+        greenChips.Clear();
+        blueChips.Clear();
+        currentBalance = 0;
+
         SpawnChips(ChipColor.black, 25, 4, chipPrefabBlack);
         SpawnChips(ChipColor.red, 10, 4, chipPrefabRed);
         SpawnChips(ChipColor.green, 5, 4, chipPrefabGreen);
         SpawnChips(ChipColor.blue, 1, 5, chipPrefabBlue);
+
+        currentBalance = totalChips.Sum(c => c.value);
+        if (IsServer)
+        {
+            networkBalance.Value = currentBalance;
+        }
+
+        Debug.Log($"Player {OwnerClientId} chips assigned. Total chips: {totalChips.Count}, Balance: {currentBalance}");
+        OnBalanceChanged?.Invoke(currentBalance);
     }
     private int GenerateChipId()
     {
@@ -140,7 +185,7 @@ public class PlayerController : NetworkBehaviour
         Transform chipsParent = transform.Find("Chips/" + color.ToString());
         if (chipsParent == null)
         {
-            Debug.LogError($"Missing Chips/{color} parent under player.");
+            Debug.LogError($"Missing Chips/{color} parent under player {OwnerClientId}.");
             return;
         }
 
@@ -148,8 +193,12 @@ public class PlayerController : NetworkBehaviour
         {
             GameObject chipGO = Instantiate(prefab, chipsParent);
             chipGO.transform.localPosition = new Vector3(0, 0.005f * i, 0);
+
             var networkObject = chipGO.GetComponent<NetworkObject>();
-            networkObject.SpawnWithOwnership(OwnerClientId);
+            if (networkObject != null)
+            {
+                networkObject.SpawnWithOwnership(OwnerClientId);
+            }
 
             var chipModel = chipGO.GetComponent<ChipModel>();
             chipModel.value = value;
@@ -163,6 +212,8 @@ public class PlayerController : NetworkBehaviour
             }
 
             totalChips.Add(chipModel);
+            currentBalance += chipModel.value;
+
             switch (color)
             {
                 case ChipColor.black: blackChips.Add(chipModel); break;
@@ -170,6 +221,8 @@ public class PlayerController : NetworkBehaviour
                 case ChipColor.green: greenChips.Add(chipModel); break;
                 case ChipColor.blue: blueChips.Add(chipModel); break;
             }
+
+            Debug.Log($"Added {color} chip worth {value}. New balance: {currentBalance}");
         }
     }
 
@@ -437,8 +490,14 @@ public class PlayerController : NetworkBehaviour
         chip.transform.localRotation = Quaternion.identity;
         totalChips.Remove(chip);
 
+        currentBalance = totalChips.Sum(c => c.value);
+        networkBalance.Value = currentBalance;
+        UpdateBalanceClientRpc(currentBalance);
+
         chip.ownerClientId.Value = 0;
         chip.stackPosition.Value = stackPosition;
+
+        Debug.Log($"Chip moved to bank. New balance: {currentBalance}");
     }
 
     private void InitializeBank()
@@ -458,6 +517,18 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    [ClientRpc]
+    public void UpdateBalanceClientRpc(int newBalance)
+    {
+        if (!IsServer) // Only update on clients
+        {
+            Debug.Log($"Client {OwnerClientId} received balance update: {newBalance}");
+            currentBalance = newBalance;
+            OnBalanceChanged?.Invoke(newBalance);
+        }
+    }
+
+   
     private void ClearBank()
     {
         if (!IsServer) return;
@@ -592,7 +663,6 @@ public class PlayerController : NetworkBehaviour
         OnBalanceChanged += balance =>
         {
             Debug.Log($"Balance updated to {balance}");
-           
         };
 
         List<Transform> children = gameObject.GetComponentsInChildren<Transform>().ToList();
@@ -645,19 +715,16 @@ public class PlayerController : NetworkBehaviour
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
-        foreach (ChipModel chip in totalChips)
-        {
-            currentBalance += chip.value;
-        }
 
-        if (roundModel is null)
+        InitializeBalanceCanvas();
+
+        Debug.Log($"Player {OwnerClientId} Start - IsServer: {IsServer}, IsOwner: {IsOwner}, Balance: {currentBalance}, Chips: {totalChips.Count}");
+
+        if (roundModel == null)
         {
             Debug.LogError("RoundModel not found in scene!");
         }
-        else if (!roundModel.IsSpawned)
-        {
-            Debug.LogError("RoundModel exists but isn't spawned!");
-        }
+
         if (!IsOwner)
         {
             AudioListener listener = GetComponent<AudioListener>();
@@ -666,13 +733,55 @@ public class PlayerController : NetworkBehaviour
                 listener.enabled = false;
             }
         }
+        StartCoroutine(DelayedBalanceCheck());
+    }
+
+    private System.Collections.IEnumerator DelayedBalanceCheck()
+    {
+        yield return new WaitForSeconds(1f);
+
+        int calculatedBalance = totalChips.Sum(c => c.value);
+        if (calculatedBalance != currentBalance)
+        {
+            Debug.LogWarning($"Balance mismatch! Current: {currentBalance}, Calculated: {calculatedBalance}. Correcting...");
+            currentBalance = calculatedBalance;
+            OnBalanceChanged?.Invoke(currentBalance);
+        }
+
+        Debug.Log($"Player {OwnerClientId} final balance: {currentBalance}, total chips: {totalChips.Count}");
+    }
+
+    private void InitializeBalanceCanvas()
+    {
+        if (balancePrefab != null)
+        {
+            GameObject canvasInstance = Instantiate(balancePrefab, transform);
+            balanceCanvasController = canvasInstance.GetComponent<BalanceCanvasController>();
+            balanceCanvasController.Initialize(this);
+
+            StartCoroutine(DelayedCanvasUpdate());
+        }
+        else
+        {
+            Debug.LogError("Balance prefab is not assigned!");
+        }
+    }
+
+    private System.Collections.IEnumerator DelayedCanvasUpdate()
+    {
+        yield return new WaitForSeconds(0.5f);
+
+        if (balanceCanvasController != null)
+        {
+            balanceCanvasController.UpdateBalanceDisplay(currentBalance);
+            Debug.Log($"Canvas updated with balance: {currentBalance}");
+        }
     }
 
     void InitializeChips()
     {
         foreach (ChipModel chip in totalChips)
         {
-            currentBalance += chip.value;
             switch (chip.color)
             {
                 case ChipColor.black:
@@ -693,6 +802,34 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    private void DebugChipState()
+    {
+        Debug.Log($"=== Player {OwnerClientId} Chip State ===");
+        Debug.Log($"Total Chips: {totalChips.Count}");
+        Debug.Log($"Black Chips: {blackChips.Count}");
+        Debug.Log($"Red Chips: {redChips.Count}");
+        Debug.Log($"Green Chips: {greenChips.Count}");
+        Debug.Log($"Blue Chips: {blueChips.Count}");
+        Debug.Log($"Current Balance: {currentBalance}");
+        Debug.Log($"Calculated Balance: {totalChips.Sum(c => c.value)}");
+        Debug.Log($"IsServer: {IsServer}, IsOwner: {IsOwner}");
+        Debug.Log($"=============================");
+    }
+    private void OnMouseEnter()
+    {
+        if (balanceCanvasController != null)
+        {
+            balanceCanvasController.OnMouseEnterPlayer();
+        }
+    }
+
+    private void OnMouseExit()
+    {
+        if (balanceCanvasController != null)
+        {
+            balanceCanvasController.OnMouseExitPlayer();
+        }
+    }
     public void OnStart(InputAction.CallbackContext context)
     {
         if (context.performed)
@@ -712,6 +849,19 @@ public class PlayerController : NetworkBehaviour
     private void Update()
     {
         getAvailableActions();
+
+        if (Input.GetKeyDown(KeyCode.C) && IsOwner)
+        {
+            DebugChipState();
+
+            int calculated = totalChips.Sum(c => c.value);
+            if (calculated != currentBalance)
+            {
+                currentBalance = calculated;
+                OnBalanceChanged?.Invoke(currentBalance);
+                Debug.Log($"Balance corrected to: {currentBalance}");
+            }
+        }
     }
 
     public void OnCall(InputAction.CallbackContext context)
