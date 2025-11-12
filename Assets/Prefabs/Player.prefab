@@ -2151,6 +2151,7 @@ GameObject:
   - component: {fileID: -6678214953943697125}
   - component: {fileID: 1009342074831214439}
   - component: {fileID: 8767585017555864213}
+  - component: {fileID: 3679780247839430361}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2274,6 +2275,7 @@ MonoBehaviour:
   chipPrefabRed: {fileID: 7085839119149727733, guid: b9c51432017be144081bb645bda3fd88, type: 3}
   chipPrefabGreen: {fileID: 1215985896882317714, guid: cd31bbb470e350a4f91ba20af5d97beb, type: 3}
   chipPrefabBlue: {fileID: 4957065473226686671, guid: f3609024d1e7f2349ac97a6ac06b899c, type: 3}
+  balancePrefab: {fileID: 8800011707638808931, guid: 24fd9832764daf045a6e10f26eb5a808, type: 3}
 --- !u!114 &3148567107051518674
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2516,6 +2518,27 @@ AudioListener:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7892131989823861977}
   m_Enabled: 1
+--- !u!65 &3679780247839430361
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7892131989823861977}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.5, y: 2, z: 0.5}
+  m_Center: {x: 0, y: 1, z: 0}
 --- !u!1 &8132357991945336338
 GameObject:
   m_ObjectHideFlags: 0
