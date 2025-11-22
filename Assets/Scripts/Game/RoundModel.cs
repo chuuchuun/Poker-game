@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class RoundModel : NetworkBehaviour
@@ -20,7 +19,6 @@ public class RoundModel : NetworkBehaviour
     private BettingControlBehavior bettingController => GameManager.Instance.GetComponent<BettingControlBehavior>();
 
     private List<PlayerController> playerModels = new List<PlayerController>();
-
     private RoundStage roundStage = RoundStage.PREPARATION;
 
     public override void OnNetworkSpawn()
@@ -31,11 +29,6 @@ public class RoundModel : NetworkBehaviour
     private void Awake()
     {
         UpdatePlayers();
-    }
-
-    private void Start()
-    {
-        Debug.Log($"[RoundModel] Pre-RPC check | IsSpawned={NetworkObject.IsSpawned} | ObjId={NetworkObjectId} | IsServer={IsServer} | IsOwner={IsOwner}");
     }
 
     public int GetCurrentHighestBet() => bettingController.GetCurrentHighestBet();
@@ -50,6 +43,11 @@ public class RoundModel : NetworkBehaviour
         queueControlBehavior.SetPlayers(playerIds.ToList());
 
         bettingController.InitializeBetting(playerModels);
+
+        if (IsServer)
+        {
+            SendRoundStartMessage(firstPlayerId);
+        }
     }
 
     private void UpdatePlayers()
@@ -70,22 +68,36 @@ public class RoundModel : NetworkBehaviour
         roundStage = RoundStage.ENDING;
         Debug.Log("Round ended");
 
+        if (IsServer)
+        {
+            SendRoundEndMessage();
+        }
+
         StartCoroutine(Delay(5, () =>
         {
             List<CardModel> tableCards = deckControlBehavior.GetCardsOnTable();
             List<(ulong, List<CardModel>)> playerHands = playerModels
-            .Select(model => 
-                (model.playerId, model.cardsInHand)
-            ).ToList();
+                .Select(model => (model.playerId, model.cardsInHand))
+                .ToList();
 
             List<ulong> winners = HandEvaluator.GetWinners(playerHands, tableCards);
-            winners.ForEach(winner => {
-                bettingController.DistributeWinnings(
-                    winner, 
-                    bettingController.GetCurrentBank() / winners.Count()
-                );
-            });
-            Debug.Log("Round started");
+            int potAmount = bettingController.GetCurrentBank();
+
+            if (IsServer)
+            {
+                SendWinnerMessages(winners, potAmount);
+            }
+
+            if (winners.Count > 0)
+            {
+                int winnerAmount = potAmount / winners.Count;
+                winners.ForEach(winner =>
+                {
+                    bettingController.DistributeWinnings(winner, winnerAmount);
+                });
+            }
+
+            Debug.Log("Round cleanup started");
             deckControlBehavior.CollectAllCards();
             roundStage = RoundStage.PREPARATION;
 
@@ -96,13 +108,18 @@ public class RoundModel : NetworkBehaviour
                 deckControlBehavior.DealCards(playerModels);
 
                 bettingController.InitializeBetting(playerModels);
+
+                if (IsServer)
+                {
+                    SendNewRoundMessage();
+                }
             }));
         }));
     }
 
     private IEnumerator Delay(int seconds, Action code)
     {
-        yield return new WaitForSeconds(10);
+        yield return new WaitForSeconds(seconds);
         code();
     }
 
@@ -112,7 +129,9 @@ public class RoundModel : NetworkBehaviour
 
         if (IsServer)
         {
-            ProcessPlayerAction(NetworkManager.Singleton.LocalClientId, action);
+            ulong playerId = NetworkManager.Singleton.LocalClientId;
+            SendPlayerActionMessage(playerId, action);
+            ProcessPlayerAction(playerId, action);
         }
         else
         {
@@ -129,27 +148,34 @@ public class RoundModel : NetworkBehaviour
     private void SubmitPlayerActionServerRpc(NetworkPlayerAction networkAction, ServerRpcParams rpcParams = default)
     {
         if (roundStage != RoundStage.GAME) return;
+
         ulong senderId = rpcParams.Receive.SenderClientId;
         IPlayerAction action = networkAction.ToAction();
 
         Debug.Log($"[SERVER] Received action type {networkAction.ActionType} with bet {networkAction.BetAmount} from {senderId}");
-        Debug.Log($"[SERVER] Converted to: {action.GetType().Name}");
 
+        SendPlayerActionMessage(senderId, action);
         ProcessPlayerAction(senderId, action);
-        PlayerActionProcessedClientRpc(senderId, networkAction.ActionType, networkAction.BetAmount, networkAction);
+
+        NotifyPlayerActionClientRpc(senderId, networkAction);
     }
 
     [ClientRpc]
-    private void PlayerActionProcessedClientRpc(ulong playerId, ActionType actionType, int betAmount, NetworkPlayerAction networkAction)
+    private void NotifyPlayerActionClientRpc(ulong playerId, NetworkPlayerAction networkAction)
     {
-        Debug.Log($"[CLIENT] Player {playerId} made action={actionType}, bet={betAmount}");
-        IPlayerAction action = networkAction.ToAction();
-        ProcessPlayerAction(playerId, action);
+        Debug.Log($"[CLIENT] Player {playerId} made action={networkAction.ActionType}, bet={networkAction.BetAmount}");
+
+        if (!IsServer)
+        {
+            IPlayerAction action = networkAction.ToAction();
+            ProcessPlayerAction(playerId, action);
+        }
     }
 
     private void ProcessPlayerAction(ulong playerId, IPlayerAction action)
     {
         if (roundStage != RoundStage.GAME) return;
+
         Debug.Log($"[RoundModel] Processing {action.GetType().Name} for player {playerId}");
 
         if (!queueControlBehavior.ShouldAcceptActionFromPlayerWithId(playerId)) return;
@@ -164,6 +190,12 @@ public class RoundModel : NetworkBehaviour
             Debug.Log($"Current bank is {bettingController.GetCurrentBank()}");
             queueControlBehavior.SwitchTurnToNextPlayer();
             UpdatePlayersState();
+
+            ulong nextPlayerId = queueControlBehavior.GetCurrentPlayerId();
+            if (nextPlayerId != playerId && IsServer)
+            {
+                SendTurnChangeMessage(nextPlayerId);
+            }
         }
     }
 
@@ -175,5 +207,75 @@ public class RoundModel : NetworkBehaviour
         {
             bettingController.UpdatePlayerState(player);
         }
+    }
+
+    private void SendRoundStartMessage(ulong firstPlayerId)
+    {
+        if (ChatManager.Instance != null)
+        {
+            ChatManager.Instance.SendRoundStartServerRpc(firstPlayerId);
+        }
+    }
+
+    private void SendRoundEndMessage()
+    {
+        if (ChatManager.Instance != null)
+        {
+            ChatManager.Instance.SendRoundEndServerRpc();
+        }
+    }
+
+    private void SendWinnerMessages(List<ulong> winners, int potAmount)
+    {
+        if (ChatManager.Instance != null)
+        {
+            if (winners.Count == 1)
+            {
+                ChatManager.Instance.SendWinnerMessageServerRpc(winners[0], potAmount);
+            }
+            else
+            {
+                ChatManager.Instance.SendSplitPotServerRpc(winners.ToArray(), potAmount / winners.Count);
+            }
+        }
+    }
+
+    private void SendNewRoundMessage()
+    {
+        if (ChatManager.Instance != null)
+        {
+            ChatManager.Instance.SendGameMessageServerRpc("New round started!");
+        }
+    }
+
+    private void SendPlayerActionMessage(ulong playerId, IPlayerAction action)
+    {
+        if (ChatManager.Instance != null)
+        {
+            BetAction betAction = ConvertToBetAction(action.TypeId);
+            ChatManager.Instance.SendPlayerActionServerRpc(playerId, betAction, action.NewBet);
+        }
+    }
+
+    private void SendTurnChangeMessage(ulong nextPlayerId)
+    {
+        if (ChatManager.Instance != null)
+        {
+            ChatManager.Instance.SendTurnChangeServerRpc(nextPlayerId);
+        }
+    }
+
+    private BetAction ConvertToBetAction(ActionType actionType)
+    {
+        return actionType switch
+        {
+            ActionType.FOLD => BetAction.fold,
+            ActionType.CHECK => BetAction.check,
+            ActionType.CALL => BetAction.call,
+            ActionType.RAISE => BetAction.raise,
+            ActionType.RERAISE => BetAction.reRaise,
+            ActionType.SKIP => BetAction.start,
+            _ => BetAction.start
+        };
     }
 }

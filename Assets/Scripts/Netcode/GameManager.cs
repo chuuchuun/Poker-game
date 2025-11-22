@@ -2,17 +2,17 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
-using System.Data;
-using System;
 
 public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance;
     public GameObject playerPrefab;
     public Transform[] spawnPoints;
+    public GameObject chatPrefab;
 
     private Dictionary<ulong, int> playerSpawnIndices = new Dictionary<ulong, int>();
     private LobbyController lobbyController;
+    private bool isChatSpawned = false;
 
     private void Awake()
     {
@@ -33,6 +33,11 @@ public class GameManager : NetworkBehaviour
         NetworkManager.Singleton.OnServerStarted += OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+
+        if (IsServer)
+        {
+            StartCoroutine(DelayedChatSpawn());
+        }
     }
 
     override public void OnDestroy()
@@ -97,15 +102,70 @@ public class GameManager : NetworkBehaviour
         player.GetComponent<PlayerController>().SetSpawnIndex(spawnIndex);
     }
 
-
-    [ClientRpc]
-    private void UpdateClientPositionClientRpc(ulong clientId, Vector3 position)
+    private void SpawnChatSystem()
     {
-        if (NetworkManager.Singleton.LocalClientId == clientId)
+        if (isChatSpawned)
         {
-            GameObject player = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(clientId).gameObject;
-            player.transform.position = position;
-            Debug.Log($"Client {clientId} position updated to {position}");
+            Debug.Log("Chat system already spawned, skipping...");
+            return;
+        }
+
+        if (chatPrefab == null)
+        {
+            Debug.LogError("Chat prefab is null! Please assign chat prefab in GameManager inspector.");
+            return;
+        }
+
+        if (!IsServer)
+        {
+            Debug.LogWarning("Trying to spawn chat system but not server, skipping...");
+            return;
+        }
+
+        try
+        {
+            Debug.Log("Spawning single chat system...");
+            GameObject chatInstance = Instantiate(chatPrefab);
+            NetworkObject chatNetworkObject = chatInstance.GetComponent<NetworkObject>();
+
+            if (chatNetworkObject == null)
+            {
+                Debug.LogError("Chat prefab doesn't have NetworkObject component!");
+                Destroy(chatInstance);
+                return;
+            }
+
+            // Spawn the chat system for all clients
+            chatNetworkObject.SpawnWithOwnership(NetworkManager.ServerClientId, true);
+            isChatSpawned = true;
+
+            Debug.Log($"Chat system spawned successfully! NetworkObjectId: {chatNetworkObject.NetworkObjectId}");
+
+            // Verify chat manager component
+            ChatManager chatManager = chatInstance.GetComponent<ChatManager>();
+            if (chatManager == null)
+            {
+                Debug.LogError("Chat prefab doesn't have ChatManager component!");
+            }
+            else
+            {
+                Debug.Log("ChatManager found and ready!");
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to spawn chat system: {e.Message}");
+        }
+    }
+
+    private IEnumerator DelayedChatSpawn()
+    {
+        yield return new WaitForSeconds(1f);
+
+        if (IsServer && !isChatSpawned)
+        {
+            Debug.Log("Delayed chat spawn attempt...");
+            SpawnChatSystem();
         }
     }
 
@@ -118,7 +178,6 @@ public class GameManager : NetworkBehaviour
         if (playerController != null)
         {
             playerController.ClearHand();
-            
         }
     }
 
@@ -130,13 +189,26 @@ public class GameManager : NetworkBehaviour
     private void OnClientConnected(ulong clientId)
     {
         AssignSpawnPoint(clientId);
+
+        // Notify chat about player joining
+        if (IsServer && ChatManager.Instance != null)
+        {
+            ChatManager.Instance.SendPlayerJoinedServerRpc(clientId);
+        }
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
         ClearHand(clientId);
         ResetSpawnPoint(clientId);
+
+        // Notify chat about player leaving
+        if (IsServer && ChatManager.Instance != null)
+        {
+            ChatManager.Instance.SendPlayerLeftServerRpc(clientId);
+        }
     }
+
     public void DisconnectClient(ulong clientId)
     {
         if (!IsServer) return;
@@ -169,5 +241,4 @@ public class GameManager : NetworkBehaviour
         NetworkManager.Singleton.DisconnectClient(clientId);
         Debug.Log($"Client {clientId} disconnected from server.");
     }
-
 }

@@ -61,10 +61,15 @@ public class QueueControlBehavior : NetworkBehaviour
             if (deckControlBehavior.CanAddCardsToTable())
             {
                 deckControlBehavior.AddCardsToTableServerRpc();
-            } else
+            }
+            else
             {
                 roundModel.EndRound();
             }
         }
+    }
+    public ulong GetCurrentPlayerId()
+    {
+        return waitingForTurnOfPlayerWithId;
     }
 }
