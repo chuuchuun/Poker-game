@@ -7,6 +7,11 @@ public class LobbyController : NetworkBehaviour
     private NetworkList<PlayerReadinessState> readinessList = new NetworkList<PlayerReadinessState>();
     private NetworkVariable<bool> hasStartedGame = new NetworkVariable<bool>(false);
 
+    private void Start()
+    {
+        // Chat is now handled by ChatManager singleton
+    }
+
     public bool HasStartedGame()
     {
         return hasStartedGame.Value;
@@ -31,6 +36,12 @@ public class LobbyController : NetworkBehaviour
     private void OnClientConnected(ulong clientId)
     {
         if (!IsServer) return;
+
+        // Use ChatManager singleton instead of finding chat controller
+        if (ChatManager.Instance != null)
+        {
+            ChatManager.Instance.SendPlayerJoinedServerRpc(clientId);
+        }
 
         readinessList.Add(new PlayerReadinessState(clientId, false));
     }

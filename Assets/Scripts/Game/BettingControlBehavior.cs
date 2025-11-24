@@ -74,6 +74,7 @@ public class BettingControlBehavior : NetworkBehaviour
 
         if (action.TypeId == ActionType.CALL)
         {
+            Debug.LogWarning($"CALL: requiredToCall={requiredToCall}, playerBalance={player.CurrentBalance}, currentHighestBet={currentHighestBet}, playerCurrentBet={player.currentBet}");
             if (requiredToCall <= player.CurrentBalance)
             {
                 var movedChips = player.RemoveChip(requiredToCall);
@@ -83,7 +84,7 @@ public class BettingControlBehavior : NetworkBehaviour
                     player.CurrentBalance -= requiredToCall;
                     player.currentBet += requiredToCall;
                     state.currentBalance = player.CurrentBalance;
-                    state.currentBet = currentHighestBet;
+                    state.currentBet = player.currentBet;
                     playerStates[index] = state;
                     currentBank += requiredToCall;
                     return true;

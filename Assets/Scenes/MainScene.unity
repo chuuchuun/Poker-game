@@ -2507,6 +2507,7 @@ MonoBehaviour:
   - {fileID: 2073611263}
   - {fileID: 2092558474}
   - {fileID: 710252469}
+  chatPrefab: {fileID: 3465306123674834375, guid: 096224a846e1e1d4f8be329f3b8ebf84, type: 3}
 --- !u!4 &345441756
 Transform:
   m_ObjectHideFlags: 0

@@ -2152,6 +2152,7 @@ GameObject:
   - component: {fileID: 1009342074831214439}
   - component: {fileID: 8767585017555864213}
   - component: {fileID: 3679780247839430361}
+  - component: {fileID: 1608770841879965965}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2204,7 +2205,7 @@ Rigidbody:
   m_UseGravity: 0
   m_IsKinematic: 0
   m_Interpolate: 1
-  m_Constraints: 0
+  m_Constraints: 126
   m_CollisionDetection: 1
 --- !u!95 &1947735170944995193
 Animator:
@@ -2262,6 +2263,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerId: 0
   totalChips: []
+  currentBalance: 0
   currentBet: 0
   cardsInHand: []
   cardSlots: []
@@ -2270,6 +2272,8 @@ MonoBehaviour:
   raiseText: {fileID: 0}
   reraiseText: {fileID: 0}
   isMyTurn:
+    m_InternalValue: 0
+  networkBalance:
     m_InternalValue: 0
   chipPrefabBlack: {fileID: 8563654270611086648, guid: 61bff3883f1340b4f99296cf551b37f0, type: 3}
   chipPrefabRed: {fileID: 7085839119149727733, guid: b9c51432017be144081bb645bda3fd88, type: 3}
@@ -2539,6 +2543,18 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.5, y: 2, z: 0.5}
   m_Center: {x: 0, y: 1, z: 0}
+--- !u!114 &1608770841879965965
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7892131989823861977}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &8132357991945336338
 GameObject:
   m_ObjectHideFlags: 0
