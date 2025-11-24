@@ -10,7 +10,7 @@ public class MultiplayerScreenFlowCoordinatorImpl : MultiplayerScreenFlowCoordin
 
     private void OnEnable()
     {
-        SceneManager.sceneLoaded += OnSceneLoaded;
+        
     }
 
     private void OnDisable()
@@ -66,6 +66,7 @@ public class MultiplayerScreenFlowCoordinatorImpl : MultiplayerScreenFlowCoordin
 
         LANLobbyManager.Instance.LobbyName = lobbyName;
 
+        SceneManager.sceneLoaded += OnSceneLoaded;
         SceneManager.LoadScene("MainScene");
     }
 
@@ -76,6 +77,7 @@ public class MultiplayerScreenFlowCoordinatorImpl : MultiplayerScreenFlowCoordin
         isCreatingGame = false;
         selectedLobbyIP = lobbyIP;
 
+        SceneManager.sceneLoaded += OnSceneLoaded;
         SceneManager.LoadScene("MainScene");
     }
     public void JoinGame()

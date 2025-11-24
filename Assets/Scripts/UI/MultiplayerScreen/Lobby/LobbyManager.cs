@@ -44,15 +44,15 @@ public class LANLobbyManager
             broadcaster.EnableBroadcast = true;
 
             IPEndPoint endPoint = new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
-            byte[] data = Encoding.UTF8.GetBytes(LobbyName);
 
             while (isBroadcasting)
             {
                 try
                 {
+                    byte[] data = BuildLobbyBroadcastPacket();
                     broadcaster.Send(data, data.Length, endPoint);
                 }
-                catch {}
+                catch { }
 
                 Thread.Sleep(1000);
             }
@@ -62,6 +62,15 @@ public class LANLobbyManager
 
         broadcastThread.IsBackground = true;
         broadcastThread.Start();
+    }
+
+    private byte[] BuildLobbyBroadcastPacket()
+    {
+        int currentPlayers = NetworkManager.Singleton.ConnectedClientsList.Count;
+        int maxPlayers = 6;
+
+        string packet = $"{LobbyName}|{currentPlayers}|{maxPlayers}";
+        return Encoding.UTF8.GetBytes(packet);
     }
 
     public void StopBroadcasting()
@@ -91,7 +100,6 @@ public class LANLobbyManager
         UdpClient receivingSocket = new UdpClient();
         receivingSocket.EnableBroadcast = true;
         receivingSocket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-
         receivingSocket.Client.Bind(new IPEndPoint(IPAddress.Any, BroadcastPort));
 
         while (isListening)
@@ -99,19 +107,35 @@ public class LANLobbyManager
             try
             {
                 byte[] data = receivingSocket.Receive(ref from);
-                string lobbyName = Encoding.UTF8.GetString(data);
 
-                lock (lobbyLock)
+                string packet = Encoding.UTF8.GetString(data);
+                string[] parts = packet.Split('|');
+
+                if (parts.Length == 3)
                 {
-                    bool exists = AvailableLobbies.Exists(l => l.LobbyId == from.Address.ToString());
-                    if (!exists)
+                    string lobbyName = parts[0];
+                    int currentPlayers = int.Parse(parts[1]);
+                    int maxPlayers = int.Parse(parts[2]);
+
+                    lock (lobbyLock)
                     {
-                        AvailableLobbies.Add(new LobbyInfo(
-                            id: from.Address.ToString(),
-                            name: lobbyName,
-                            current: 0,
-                            max: 4
-                        ));
+                        var existing = AvailableLobbies.Find(l => l.LobbyId == from.Address.ToString());
+
+                        if (existing == null)
+                        {
+                            AvailableLobbies.Add(new LobbyInfo(
+                                id: from.Address.ToString(),
+                                name: lobbyName,
+                                currentPlayers: currentPlayers,
+                                maxPlayers: maxPlayers
+                            ));
+                        }
+                        else
+                        {
+                            existing.LobbyName = lobbyName;
+                            existing.CurrentPlayers = currentPlayers;
+                            existing.MaxPlayers = maxPlayers;
+                        }
                     }
                 }
             }
