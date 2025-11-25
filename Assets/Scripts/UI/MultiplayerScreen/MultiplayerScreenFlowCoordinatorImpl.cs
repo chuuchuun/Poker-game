@@ -8,16 +8,6 @@ public class MultiplayerScreenFlowCoordinatorImpl : MultiplayerScreenFlowCoordin
     private bool isCreatingGame = false;
     private string selectedLobbyIP = "";
 
-    private void OnEnable()
-    {
-        
-    }
-
-    private void OnDisable()
-    {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-    }
-
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         Debug.Log("Scene loaded: " + scene.name);

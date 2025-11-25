@@ -16,6 +16,7 @@ public class LANLobbyManager
     private readonly object lobbyLock = new object();
 
     public int BroadcastPort { get; set; } = 47777;
+    public int GamePort { get; set; } = 7777;
     public string LobbyName { get; set; } = "My LAN Lobby";
 
     private UdpClient listenerClient;
@@ -25,9 +26,20 @@ public class LANLobbyManager
     private Thread broadcastThread;
     private bool isBroadcasting = false;
 
+    // Store the actual server IP for joining
+    private string serverIPAddress;
+
     private LANLobbyManager() { }
+
     public void StartHostLAN()
     {
+        // Configure Unity Transport for host
+        var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        transport.SetConnectionData("0.0.0.0", (ushort)GamePort);
+
+        // Get the local IP address for broadcasting
+        serverIPAddress = GetLocalIPAddress();
+
         NetworkManager.Singleton.StartHost();
         StartBroadcasting();
     }
@@ -49,10 +61,14 @@ public class LANLobbyManager
             {
                 try
                 {
+                    // Include the actual server IP in the broadcast packet
                     byte[] data = BuildLobbyBroadcastPacket();
                     broadcaster.Send(data, data.Length, endPoint);
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    UnityEngine.Debug.LogWarning($"Broadcast error: {e.Message}");
+                }
 
                 Thread.Sleep(1000);
             }
@@ -66,10 +82,10 @@ public class LANLobbyManager
 
     private byte[] BuildLobbyBroadcastPacket()
     {
-        int currentPlayers = NetworkManager.Singleton.ConnectedClientsList.Count;
+        int currentPlayers = NetworkManager.Singleton?.ConnectedClientsList.Count ?? 0;
         int maxPlayers = 6;
 
-        string packet = $"{LobbyName}|{currentPlayers}|{maxPlayers}";
+        string packet = $"{LobbyName}|{currentPlayers}|{maxPlayers}|{serverIPAddress}";
         return Encoding.UTF8.GetBytes(packet);
     }
 
@@ -83,9 +99,7 @@ public class LANLobbyManager
     {
         if (isListening) return;
 
-        listenerClient = new UdpClient(0);
-        listenerClient.EnableBroadcast = true;
-
+        AvailableLobbies.Clear();
         isListening = true;
 
         listenThread = new Thread(ListenLoop);
@@ -107,27 +121,31 @@ public class LANLobbyManager
             try
             {
                 byte[] data = receivingSocket.Receive(ref from);
-
                 string packet = Encoding.UTF8.GetString(data);
                 string[] parts = packet.Split('|');
 
-                if (parts.Length == 3)
+                if (parts.Length >= 3)
                 {
                     string lobbyName = parts[0];
                     int currentPlayers = int.Parse(parts[1]);
                     int maxPlayers = int.Parse(parts[2]);
 
+                    string lobbyIP = parts.Length >= 4 ? parts[3] : from.Address.ToString();
+
+                    string lobbyId = $"{lobbyIP}:{GamePort}";
+
                     lock (lobbyLock)
                     {
-                        var existing = AvailableLobbies.Find(l => l.LobbyId == from.Address.ToString());
+                        var existing = AvailableLobbies.Find(l => l.LobbyId == lobbyId);
 
                         if (existing == null)
                         {
                             AvailableLobbies.Add(new LobbyInfo(
-                                id: from.Address.ToString(),
+                                id: lobbyId,
                                 name: lobbyName,
                                 currentPlayers: currentPlayers,
-                                maxPlayers: maxPlayers
+                                maxPlayers: maxPlayers,
+                                ipAddress: lobbyIP
                             ));
                         }
                         else
@@ -135,13 +153,15 @@ public class LANLobbyManager
                             existing.LobbyName = lobbyName;
                             existing.CurrentPlayers = currentPlayers;
                             existing.MaxPlayers = maxPlayers;
+                            existing.IPAddress = lobbyIP;
                         }
                     }
                 }
             }
-            catch
+            catch (Exception e)
             {
-                break;
+                UnityEngine.Debug.LogWarning($"Listen error: {e.Message}");
+                if (!isListening) break;
             }
         }
 
@@ -151,7 +171,18 @@ public class LANLobbyManager
     public void StopListening()
     {
         isListening = false;
-        listenThread?.Join();
+
+        try
+        {
+            using (var tempClient = new UdpClient())
+            {
+                tempClient.Connect("127.0.0.1", BroadcastPort);
+                tempClient.Send(new byte[0], 0);
+            }
+        }
+        catch { }
+
+        listenThread?.Join(1000);
 
         listenerClient?.Close();
         listenerClient = null;
@@ -159,10 +190,62 @@ public class LANLobbyManager
 
     public void JoinGameLAN(string ipAddress)
     {
+        string cleanIP = ipAddress;
+        if (ipAddress.Contains(":"))
+        {
+            cleanIP = ipAddress.Split(':')[0];
+        }
+
+        string connectIP = (cleanIP == GetLocalIPAddress()) ? "127.0.0.1" : cleanIP;
+
+        UnityEngine.Debug.Log($"Joining game at {connectIP}:{GamePort}");
+
         var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-        transport.ConnectionData.Address = ipAddress;
-        transport.ConnectionData.Port = 7777;
+        transport.SetConnectionData(connectIP, (ushort)GamePort);
 
         NetworkManager.Singleton.StartClient();
+    }
+
+    public void JoinGameLAN(LobbyInfo lobby)
+    {
+        JoinGameLAN(lobby.IPAddress);
+    }
+
+    private string GetLocalIPAddress()
+    {
+        try
+        {
+            using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0))
+            {
+                socket.Connect("8.8.8.8", 65530);
+                IPEndPoint endPoint = socket.LocalEndPoint as IPEndPoint;
+                return endPoint?.Address?.ToString() ?? "127.0.0.1";
+            }
+        }
+        catch
+        {
+            try
+            {
+                var host = Dns.GetHostEntry(Dns.GetHostName());
+                foreach (var ip in host.AddressList)
+                {
+                    if (ip.AddressFamily == AddressFamily.InterNetwork)
+                    {
+                        return ip.ToString();
+                    }
+                }
+            }
+            catch { }
+
+            return "127.0.0.1";
+        }
+    }
+
+    public void ClearLobbies()
+    {
+        lock (lobbyLock)
+        {
+            AvailableLobbies.Clear();
+        }
     }
 }
