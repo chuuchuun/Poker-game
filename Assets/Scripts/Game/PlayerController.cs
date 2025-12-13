@@ -359,32 +359,221 @@ public class PlayerController : NetworkBehaviour
         cardsInHand.Clear();
     }
 
+    private int[] RequiredChips(int bet)
+    {
+        int[] chipValues = new int[] { 25, 10, 5, 1 };
+        List<int> requiredChipValues = new List<int>();
+        for (int i = 0; i < chipValues.Length; i++)
+        {
+            if (bet <= 0)
+                break;
+
+            int chipValue = chipValues[i];
+            int maxChipsNeeded = bet / chipValue;
+            int chipsUsed = maxChipsNeeded;
+
+            for (int j = 0; j < chipsUsed; j++)
+                requiredChipValues.Add(chipValue);
+
+            bet -= chipsUsed * chipValue;
+        }
+
+        return requiredChipValues.ToArray();
+    }
+
+    private void UpdateChipsToMeetRequirements(List<int> chips)
+    {
+        int[] currentChips = new int[4];
+        int[] requiredChips = new int[4];
+
+        int[][] tradeRules = new int[][] {
+            new int[] { 1, -2, -1, 0 },
+            new int[] { 0, 1, -2, 0 },
+            new int[] { 0, 0, 1, -5 }
+        };
+
+        currentChips[0] = totalChips.Count(c => c.color == ChipColor.black);
+        requiredChips[0] = chips.Count(c => c == 25);
+
+        currentChips[1] = totalChips.Count(c => c.color == ChipColor.red);
+        requiredChips[1] = chips.Count(c => c == 10);
+
+        currentChips[2] = totalChips.Count(c => c.color == ChipColor.green);
+        requiredChips[2] = chips.Count(c => c == 5);
+
+        currentChips[3] = totalChips.Count(c => c.color == ChipColor.blue);
+        requiredChips[3] = chips.Count(c => c == 1);
+
+        int[] chipDiff = new int[4];
+        for (int i = 0; i < 4; i++) chipDiff[i] = currentChips[i] - requiredChips[i];
+
+        List<int> actionSequence = new List<int>();
+
+        while (chipDiff.Any(c => c < 0))
+        {
+            int bestRule = -1;
+            int bestSign = 0;
+            int bestScore = int.MinValue;
+
+            for (int r = 0; r < tradeRules.Length; r++)
+            {
+                foreach (int sign in new[] { 1, -1 })
+                {
+                    int[] temp = new int[4];
+                    for (int i = 0; i < 4; i++)
+                        temp[i] = chipDiff[i] + tradeRules[r][i] * sign;
+
+                    int score = 0;
+                    for (int i = 0; i < 4; i++)
+                        if (temp[i] < 0) score += temp[i];
+
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestRule = r;
+                        bestSign = sign;
+                    }
+                }
+            }
+
+            actionSequence.Add((bestRule + 1) * bestSign);
+
+            for (int i = 0; i < 4; i++)
+                chipDiff[i] += tradeRules[bestRule][i] * bestSign;
+        }
+
+        foreach (var action in actionSequence)
+        {
+            bool up = action > 0;
+            ChipColor chipColor = action switch
+            {
+                1 => ChipColor.black,
+                2 => ChipColor.red,
+                3 => ChipColor.green,
+                _ => ChipColor.blue
+            };
+
+            if (up) TradeUp(chipColor);
+            else TradeDown(chipColor);
+        }
+    }
+
+    private int IndexOfMostNegative(int[] arr)
+    {
+        int idx = 0;
+        int val = int.MaxValue;
+        for (int i = 0; i < arr.Length; i++)
+            if (arr[i] < val)
+            {
+                val = arr[i];
+                idx = i;
+            }
+        return idx;
+    }
+
+    private bool TradeUp(ChipColor color)
+    {
+        Dictionary<ChipColor, ChipColor[]> tradeRules = new Dictionary<ChipColor, ChipColor[]>()
+        {
+            { ChipColor.black, new[] { ChipColor.red, ChipColor.red, ChipColor.green } },
+            { ChipColor.red, new[] { ChipColor.green, ChipColor.green } },
+            { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
+        };
+
+        var chipsToRemove = tradeRules[color];
+        if (chipsToRemove == null) return false;
+
+        foreach (var chipToRemove in chipsToRemove)
+        {
+            int currentCount = chipToRemove switch
+            {
+                ChipColor.black => blackChips.Count,
+                ChipColor.red => redChips.Count,
+                ChipColor.green => greenChips.Count,
+                ChipColor.blue => blueChips.Count,
+                _ => 0
+            };
+
+            if (currentCount == 0)
+            {
+                if (!TradeUp(chipToRemove)) return false;
+            }
+
+            RemoveChipInstance(chipToRemove);
+        }
+
+        AddChipInstance(color);
+
+        return true;
+    }
+
+    private bool TradeDown(ChipColor color)
+    {
+        Dictionary<ChipColor, ChipColor[]> tradeRules = new Dictionary<ChipColor, ChipColor[]>()
+        {
+            { ChipColor.black, new[] { ChipColor.red, ChipColor.red, ChipColor.green } },
+            { ChipColor.red, new[] { ChipColor.green, ChipColor.green } },
+            { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
+        };
+
+        var chipsToRemove = tradeRules[color];
+        if (chipsToRemove == null) return false;
+
+        foreach (var chipToRemove in chipsToRemove)
+        {
+            AddChipInstance(chipToRemove);
+        }
+
+        RemoveChipInstance(color);
+
+        return true;
+    }
+
+    private void AddChipInstance(ChipColor color)
+    {
+        int value;
+        GameObject prefab;
+
+        (value, prefab) = color switch {
+            ChipColor.black => (25, chipPrefabBlack),
+            ChipColor.red => (10, chipPrefabRed),
+            ChipColor.green => (25, chipPrefabGreen),
+            ChipColor.blue => (10, chipPrefabBlue)
+        };
+
+        SpawnChips(color, value, 1, prefab);
+    }
+
+    private void RemoveChipInstance(ChipColor color)
+    {
+        var chip = DropChip(color);
+        chip.NetworkObject.Despawn(true);
+    }
+
     public List<ChipModel> RemoveChip(int bet)
     {
         List<ChipModel> chipsToRemove = new List<ChipModel>();
         int[] chipValues = new int[] { 25, 10, 5, 1 };
+        int[] requiredChips = RequiredChips(bet);
+        UpdateChipsToMeetRequirements(requiredChips.ToList());
 
-        foreach (int chipValue in chipValues)
+        foreach (int chipValue in requiredChips)
         {
-            while (bet > 0)
+            ChipModel chip = GetChipByValue(chipValue);
+            if (chip != null)
             {
-                ChipModel chip = GetChipByValue(chipValue);
-                if (chip != null)
+                chipsToRemove.Add(chip);
+                switch (chip.color)
                 {
-                    chipsToRemove.Add(chip);
-                    switch (chip.color)
-                    {
-                        case ChipColor.black: blackChips.Remove(chip); break;
-                        case ChipColor.red: redChips.Remove(chip); break;
-                        case ChipColor.green: greenChips.Remove(chip); break;
-                        case ChipColor.blue: blueChips.Remove(chip); break;
-                    }
-                    bet -= chipValue;
+                    case ChipColor.black: blackChips.Remove(chip); break;
+                    case ChipColor.red: redChips.Remove(chip); break;
+                    case ChipColor.green: greenChips.Remove(chip); break;
+                    case ChipColor.blue: blueChips.Remove(chip); break;
                 }
-                else
-                {
-                    break;
-                }
+            }
+            else
+            {
+                break;
             }
         }
 
@@ -396,6 +585,34 @@ public class PlayerController : NetworkBehaviour
             return chipsToRemove;
         }
         return null;
+    }
+    ChipModel DropChip(ChipColor color)
+    {
+        switch (color)
+        {
+            case ChipColor.black:
+                var blackChip = blackChips.FirstOrDefault();
+                blackChips.Remove(blackChip);
+                totalChips.Remove(blackChip);
+                return blackChip;
+            case ChipColor.red:
+                var redChip = redChips.FirstOrDefault();
+                redChips.Remove(redChip);
+                totalChips.Remove(redChip);
+                return redChip;
+            case ChipColor.green:
+                var greenChip = greenChips.FirstOrDefault();
+                greenChips.Remove(greenChip);
+                totalChips.Remove(greenChip);
+                return greenChip;
+            case ChipColor.blue:
+                var blueChip = blueChips.FirstOrDefault();
+                blueChips.Remove(blueChip);
+                totalChips.Remove(blueChip);
+                return blueChip;
+            default:
+                return null;
+        }
     }
 
     ChipModel GetChipByValue(int value)
@@ -422,14 +639,13 @@ public class PlayerController : NetworkBehaviour
 
         InitializeBank();
 
-        var chipsByColor = totalChips
-            .Where(c => chipIds.Contains((ulong)c.chipId))
-            .GroupBy(c => c.color)
-            .OrderBy(g => g.Key);
+        var chipsToRemove = totalChips
+            .Where(chip => chipIds.ToList().Contains((ulong)chip.chipId))
+            .ToList();
 
-        foreach (var colorGroup in chipsByColor)
+        foreach (var chip in chipsToRemove)
         {
-            Transform targetParent = colorGroup.Key switch
+            Transform targetParent = chip.color switch
             {
                 ChipColor.black => chipBankBlack,
                 ChipColor.red => chipBankRed,
@@ -443,19 +659,14 @@ public class PlayerController : NetworkBehaviour
             int stackBase = targetParent.childCount;
             int stackPosition = stackBase;
 
-            foreach (var chip in colorGroup.OrderBy(c => c.stackPosition.Value))
-            {
-                chip.stackPosition.Value = stackPosition;
-                chip.ownerClientId.Value = 0;
-                chip.networkPosition.Value = new Vector3(0, stackPosition * 0.005f, 0);
-                chip.parentNetworkId.Value = targetParent.GetComponent<NetworkObject>().NetworkObjectId;
+            chip.stackPosition.Value = stackPosition;
+            chip.ownerClientId.Value = 0;
+            chip.networkPosition.Value = new Vector3(0, stackPosition * 0.1f, 0);
+            chip.parentNetworkId.Value = targetParent.GetComponent<NetworkObject>().NetworkObjectId;
 
-                MoveChipToBank(chip, targetParent, stackPosition);
+            MoveChipToBank(chip, targetParent, stackPosition);
 
-                UpdateChipPositionClientRpc(chip.chipId, targetParent.GetInstanceID(), stackPosition);
-
-                stackPosition++;
-            }
+            UpdateChipPositionClientRpc(chip.chipId, targetParent.GetInstanceID(), stackPosition);
         }
     }
 
@@ -483,8 +694,6 @@ public class PlayerController : NetworkBehaviour
 
     private void MoveChipToBank(ChipModel chip, Transform targetParent, int stackPosition)
     {
-        if (!IsServer) return;
-
         chip.transform.SetParent(targetParent);
         chip.transform.localPosition = new Vector3(0, stackPosition * 0.005f, 0);
         chip.transform.localRotation = Quaternion.identity;
@@ -507,7 +716,7 @@ public class PlayerController : NetworkBehaviour
             chipBank = GameObject.FindGameObjectWithTag("chip_bank")?.transform;
             if (chipBank != null)
             {
-                chipBankBlack = chipBank.Find("black");
+                chipBankBlack = chipBank.Find("black"); 
                 chipBankRed = chipBank.Find("red");
                 chipBankGreen = chipBank.Find("green");
                 chipBankBlue = chipBank.Find("blue");
