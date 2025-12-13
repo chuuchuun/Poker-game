@@ -35,19 +35,26 @@ public class RoundModel : NetworkBehaviour
 
     public void StartGame(ulong[] playerIds, ulong firstPlayerId)
     {
+        queueControlBehavior.SetFirstPlayerToMove(firstPlayerId);
+        queueControlBehavior.SetPlayers(playerIds.ToList());
+
+        StartRound();
+    }
+
+    private void StartRound()
+    {
         roundStage = RoundStage.GAME;
         UpdatePlayers();
         deckControlBehavior.DealCards(playerModels);
-
-        queueControlBehavior.SetFirstPlayerToMove(firstPlayerId);
-        queueControlBehavior.SetPlayers(playerIds.ToList());
 
         bettingController.InitializeBetting(playerModels);
 
         if (IsServer)
         {
-            SendRoundStartMessage(firstPlayerId);
+            SendRoundStartMessage(playerModels[0].playerId);
         }
+
+        queueControlBehavior.StartRound();
     }
 
     private void UpdatePlayers()
@@ -73,14 +80,26 @@ public class RoundModel : NetworkBehaviour
             SendRoundEndMessage();
         }
 
-        StartCoroutine(Delay(5, () =>
+        StartCoroutine(Delay(2, () =>
         {
             List<CardModel> tableCards = deckControlBehavior.GetCardsOnTable();
             List<(ulong, List<CardModel>)> playerHands = playerModels
                 .Select(model => (model.playerId, model.cardsInHand))
+                .Where(p => !bettingController.HasPlayerFolded(p.playerId))
                 .ToList();
 
-            List<ulong> winners = HandEvaluator.GetWinners(playerHands, tableCards);
+            List<ulong> winners = new List<ulong>();
+            if (playerHands.Count > 1)
+            {
+                winners = HandEvaluator.GetWinners(playerHands, tableCards);
+                
+            }
+            else if (playerHands.Count == 1)
+            {
+                winners.Add(playerHands[0].Item1);
+            }
+
+            
             int potAmount = bettingController.GetCurrentBank();
 
             if (IsServer)
@@ -101,7 +120,7 @@ public class RoundModel : NetworkBehaviour
             deckControlBehavior.CollectAllCards();
             roundStage = RoundStage.PREPARATION;
 
-            StartCoroutine(Delay(5, () =>
+            StartCoroutine(Delay(2, () =>
             {
                 roundStage = RoundStage.GAME;
                 UpdatePlayers();
@@ -113,6 +132,8 @@ public class RoundModel : NetworkBehaviour
                 {
                     SendNewRoundMessage();
                 }
+
+                StartRound();
             }));
         }));
     }

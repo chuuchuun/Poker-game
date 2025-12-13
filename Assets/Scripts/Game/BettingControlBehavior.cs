@@ -31,6 +31,7 @@ public class BettingControlBehavior : NetworkBehaviour
 
         foreach (var player in players)
         {
+            player.currentBet = 0;
             playerStates.Add(new PlayerState
             {
                 id = player.OwnerClientId,
@@ -43,6 +44,29 @@ public class BettingControlBehavior : NetworkBehaviour
         currentHighestBet = 0;
         currentBank = 0;
         bankChips.Clear();
+    }
+
+    public bool HasRaises()
+    {
+        foreach (var state in playerStates)
+        {
+             if (state.currentBet < this.currentHighestBet && !state.hasFolded) return true;
+        }
+
+        return false;
+    }
+
+    public bool HasPlayerFolded(ulong id)
+    {
+        return playerStates.First(p => p.id == id).hasFolded;
+    }
+
+    public void SetBlinds(ulong smallBlindId, ulong bigBlindId)
+    {
+        var sbPlayer = playerControllers.First(p => p.playerId == smallBlindId);
+        var bbPlayer = playerControllers.First(p => p.playerId == bigBlindId);
+        ProcessPlayerAction(smallBlindId, new RaiseAction(1), sbPlayer);
+        ProcessPlayerAction(bigBlindId, new RaiseAction(2), bbPlayer);
     }
 
     public bool ProcessPlayerAction(ulong playerId, IPlayerAction action, PlayerController player)
