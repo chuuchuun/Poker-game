@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -7,10 +8,7 @@ public class LobbyController : NetworkBehaviour
     private NetworkList<PlayerReadinessState> readinessList = new NetworkList<PlayerReadinessState>();
     private NetworkVariable<bool> hasStartedGame = new NetworkVariable<bool>(false);
 
-    private void Start()
-    {
-        // Chat is now handled by ChatManager singleton
-    }
+    MatchController matchController => GetComponent<MatchController>();
 
     public bool HasStartedGame()
     {
@@ -36,14 +34,24 @@ public class LobbyController : NetworkBehaviour
     private void OnClientConnected(ulong clientId)
     {
         if (!IsServer) return;
-
-        // Use ChatManager singleton instead of finding chat controller
         if (ChatManager.Instance != null)
         {
             ChatManager.Instance.SendPlayerJoinedServerRpc(clientId);
         }
 
         readinessList.Add(new PlayerReadinessState(clientId, false));
+    }
+
+    public void RegisterBot(ulong botId, bool isReady = true)
+    {
+        if (!IsServer) return;
+
+        foreach (var entry in readinessList)
+        {
+            if (entry.clientId == botId) return;
+        }
+
+        readinessList.Add(new PlayerReadinessState(botId, isReady));
     }
 
     public void ToggleReadiness()
@@ -83,7 +91,6 @@ public class LobbyController : NetworkBehaviour
         }
 
         hasStartedGame.Value = true;
-        MatchController matchController = GetComponent<MatchController>();
         matchController.StartGame(GetPlayerIdsList());
     }
 

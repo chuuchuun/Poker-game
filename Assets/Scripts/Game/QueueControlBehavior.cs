@@ -2,59 +2,104 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using Unity.Netcode;
 using UnityEngine;
 
+class QueuePlayerState
+{
+    public IPlayerController player;
+    public bool hasFolded;
+}
+
 public class QueueControlBehavior : NetworkBehaviour
 {
-    private ulong firstPlayerId;
-    private ulong waitingForTurnOfPlayerWithId;
+    private IPlayerController firstPlayer;
+    private IPlayerController waitingForTurnPlayer;
     private bool passedFirstPlayer = false;
-    List<ulong> queuedPlayers = new List<ulong>();
+    List<QueuePlayerState> queuedPlayers = new List<QueuePlayerState>();
 
     DeckControlBehavior deckControlBehavior => GameManager.Instance.GetComponent<DeckControlBehavior>();
     BettingControlBehavior bettingControlBehavior => GameManager.Instance.GetComponent<BettingControlBehavior>();
     RoundModel roundModel => GameManager.Instance.GetComponent<RoundModel>();
 
-    public void SetFirstPlayerToMove(ulong id)
+    public void SetFirstPlayerToMove(IPlayerController player)
     {
-        firstPlayerId = id;
-        waitingForTurnOfPlayerWithId = id;
+        firstPlayer = player;
+        waitingForTurnPlayer = player;
+
+        waitingForTurnPlayer?.NotifyTurn(true);
     }
 
-    public void SetPlayers(List<ulong> players)
+    public void SetPlayers(List<IPlayerController> players)
     {
-        queuedPlayers = players;
+        queuedPlayers = players.Select(p =>
+        {
+            return new QueuePlayerState
+            {
+                player = p,
+                hasFolded = false
+            };
+        }).ToList();
     }
 
-    public bool ShouldAcceptActionFromPlayerWithId(ulong id)
+    public bool ShouldAcceptActionFromPlayer(IPlayerController player)
     {
-        return id == waitingForTurnOfPlayerWithId;
+        if (player == null || waitingForTurnPlayer == null) return false;
+        return player.PlayerId == waitingForTurnPlayer.PlayerId;
     }
 
     public bool OnlyOnePlayerRemains()
     {
-        return queuedPlayers
-            .Select(p => bettingControlBehavior.HasPlayerFolded(p))
-            .Where(hasFolded => hasFolded)
-            .Count() == 1;
+        int activeCount = 0;
+        foreach (var s in queuedPlayers)
+        {
+            bool folded = s.hasFolded;
+            if (s.player != null)
+            {
+                try
+                {
+                    folded = folded || bettingControlBehavior.HasPlayerFolded(s.player.PlayerId);
+                }
+                catch {}
+            }
+
+            if (!folded) activeCount++;
+            if (activeCount > 1) return false;
+        }
+        return activeCount == 1;
     }
 
     public void StartRound()
     {
-        waitingForTurnOfPlayerWithId = firstPlayerId;
-        var index = queuedPlayers.FindIndex(id => id == firstPlayerId);
-        var sbPlayer = queuedPlayers[(index + queuedPlayers.Count - 2) % queuedPlayers.Count];
-        var bbPlayer = queuedPlayers[(index + queuedPlayers.Count - 1) % queuedPlayers.Count];
+        waitingForTurnPlayer = firstPlayer;
+        if (queuedPlayers.Count == 0) return;
 
-        bettingControlBehavior.SetBlinds(sbPlayer, bbPlayer);
+        int index = queuedPlayers.FindIndex(s => s.player != null && firstPlayer != null && s.player.PlayerId == firstPlayer.PlayerId);
+        if (index == -1)
+        {
+            index = queuedPlayers.FindIndex(s => s.player != null);
+            if (index == -1) return;
+        }
+
+        var sbState = queuedPlayers[(index + queuedPlayers.Count - 2) % queuedPlayers.Count];
+        var bbState = queuedPlayers[(index + queuedPlayers.Count - 1) % queuedPlayers.Count];
+
+        bettingControlBehavior.SetBlinds(sbState.player?.PlayerId ?? 0UL, bbState.player?.PlayerId ?? 0UL);
     }
 
     private void EndRound()
     {
-        int index = queuedPlayers.FindIndex(id => id == firstPlayerId);
-        firstPlayerId = queuedPlayers[(index + 1) % queuedPlayers.Count];
+        if (queuedPlayers.Count == 0)
+        {
+            roundModel.EndRound();
+            return;
+        }
+
+        int index = queuedPlayers.FindIndex(s => s.player != null && firstPlayer != null && s.player.PlayerId == firstPlayer.PlayerId);
+        if (index == -1)
+            index = 0;
+
+        firstPlayer = queuedPlayers[(index + 1) % queuedPlayers.Count].player;
         roundModel.EndRound();
     }
 
@@ -66,15 +111,28 @@ public class QueueControlBehavior : NetworkBehaviour
             return;
         }
 
-        int index = queuedPlayers.FindIndex(id => id == waitingForTurnOfPlayerWithId);
+        if (queuedPlayers.Count == 0) return;
+
+        int index = queuedPlayers.FindIndex(state => state.player != null && state.player.PlayerId == waitingForTurnPlayer?.PlayerId);
+        if (index == -1)
+        {
+            index = queuedPlayers.FindIndex(s => !IsPlayerFoldedState(s));
+            if (index == -1) return;
+        }
+
         int newIndex = (index + 1) % queuedPlayers.Count;
-        while (bettingControlBehavior.HasPlayerFolded(queuedPlayers[newIndex]) && newIndex != index)
+        while (IsPlayerFoldedState(queuedPlayers[newIndex]) && newIndex != index)
         {
             newIndex = (newIndex + 1) % queuedPlayers.Count;
         }
 
-        waitingForTurnOfPlayerWithId = queuedPlayers[newIndex];
-        if (waitingForTurnOfPlayerWithId == firstPlayerId)
+        waitingForTurnPlayer?.NotifyTurn(false);
+
+        waitingForTurnPlayer = queuedPlayers[newIndex].player;
+
+        waitingForTurnPlayer?.NotifyTurn(true);
+
+        if (waitingForTurnPlayer != null && firstPlayer != null && waitingForTurnPlayer.PlayerId == firstPlayer.PlayerId)
         {
             passedFirstPlayer = true;
         }
@@ -84,15 +142,42 @@ public class QueueControlBehavior : NetworkBehaviour
             if (deckControlBehavior.CanAddCardsToTable())
             {
                 deckControlBehavior.AddCardsToTableServerRpc();
-            } else {
+            }
+            else
+            {
                 EndRound();
             }
 
             passedFirstPlayer = false;
         }
     }
+
+    private bool IsPlayerFoldedState(QueuePlayerState state)
+    {
+        if (state == null) return true;
+        bool folded = state.hasFolded;
+        if (state.player != null)
+        {
+            try
+            {
+                folded = folded || bettingControlBehavior.HasPlayerFolded(state.player.PlayerId);
+            }
+            catch {}
+        }
+        return folded;
+    }
+
     public ulong GetCurrentPlayerId()
     {
-        return waitingForTurnOfPlayerWithId;
+        return waitingForTurnPlayer != null ? waitingForTurnPlayer.PlayerId : 0UL;
+    }
+
+    public void MarkPlayerFoldedById(ulong playerId)
+    {
+        var state = queuedPlayers.FirstOrDefault(s => s.player != null && s.player.PlayerId == playerId);
+        if (state != null)
+        {
+            state.hasFolded = true;
+        }
     }
 }

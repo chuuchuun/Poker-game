@@ -2501,6 +2501,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerPrefab: {fileID: 7892131989823861977, guid: 1a21278947d0de741890e0245025ec2c, type: 3}
+  botPrefab: {fileID: 7892131989823861977, guid: beff43b11d591664a908868ba0d4b1c0, type: 3}
   spawnPoints:
   - {fileID: 549056446}
   - {fileID: 1911326915}
@@ -2508,6 +2509,7 @@ MonoBehaviour:
   - {fileID: 2092558474}
   - {fileID: 710252469}
   chatPrefab: {fileID: 3465306123674834375, guid: 096224a846e1e1d4f8be329f3b8ebf84, type: 3}
+  IsSingleplayer: 0
 --- !u!4 &345441756
 Transform:
   m_ObjectHideFlags: 0
@@ -2616,7 +2618,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f99e1fb8a5e109c42a48dbd1471235a9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playersFolded: []
 --- !u!1001 &349256126
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -8,8 +8,20 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : NetworkBehaviour
+public class PlayerController : NetworkBehaviour, IPlayerController
 {
+    QueueControlBehavior queueControlBehavior => GetComponent<QueueControlBehavior>();
+    public ulong PlayerId => playerId;
+    public int CurrentBet
+    {
+        get => currentBet;
+        set => currentBet = value;
+    }
+
+    public List<CardModel> CardsInHand => cardsInHand;
+    public List<Transform> CardSlots => cardSlots;
+
+    public List<ChipModel> TotalChips => totalChips;
     public ulong playerId;
     private PlayerInput input;
     public List<ChipModel> totalChips = new List<ChipModel>();
@@ -66,10 +78,10 @@ public class PlayerController : NetworkBehaviour
     public List<Transform> cardSlots = new List<Transform>();
 
     private TMP_Text callText;
-    public TMP_Text checkText;
-    public TMP_Text foldText;
-    public TMP_Text raiseText;
-    public TMP_Text reraiseText;
+    private TMP_Text checkText;
+    private TMP_Text foldText;
+    private TMP_Text raiseText;
+    private TMP_Text reraiseText;
 
     private bool isRoundStarted = false;
     private int spawnIndex = -1;
@@ -236,9 +248,10 @@ public class PlayerController : NetworkBehaviour
         return this.spawnIndex;
     }
 
-    public List<BetAction> getAvailableActions()
+    public List<BetAction> GetAvailableActions()
     {
         ResetActionText();
+        if (!isMyTurn.Value) return new List<BetAction>();
         List<BetAction> availableActions = new List<BetAction>
         {
             BetAction.check,
@@ -306,13 +319,13 @@ public class PlayerController : NetworkBehaviour
 
         IPlayerAction playerAction = action switch
         {
-            BetAction.check => new CheckAction(currentBet),
-            BetAction.fold => new FoldAction(currentBet),
-            BetAction.call => new CallAction(roundModel.GetCurrentHighestBet()),
-            BetAction.raise => new RaiseAction(newBet),
-            BetAction.reRaise => new ReRaiseAction(newBet),
-            BetAction.start => new SkipAction(0),
-            _ => new SkipAction(currentBet)
+            BetAction.check => new CheckAction(currentBet, this),
+            BetAction.fold => new FoldAction(currentBet, this),
+            BetAction.call => new CallAction(roundModel.GetCurrentHighestBet(), this),
+            BetAction.raise => new RaiseAction(newBet, this),
+            BetAction.reRaise => new ReRaiseAction(newBet, this),
+            BetAction.start => new SkipAction(0, this),
+            _ => new SkipAction(currentBet, this)
         };
 
         roundModel.TryToMakePlayerAction(playerAction);
@@ -329,9 +342,9 @@ public class PlayerController : NetworkBehaviour
             {
                 IPlayerAction playerAction = pendingAction switch
                 {
-                    BetAction.raise => new RaiseAction(betAmount),
-                    BetAction.reRaise => new ReRaiseAction(betAmount),
-                    _ => new SkipAction(currentBet)
+                    BetAction.raise => new RaiseAction(betAmount, this),
+                    BetAction.reRaise => new ReRaiseAction(betAmount, this),
+                    _ => new SkipAction(currentBet, this)
                 };
 
                 roundModel.TryToMakePlayerAction(playerAction);
@@ -1041,7 +1054,7 @@ public class PlayerController : NetworkBehaviour
     }
     public void OnStart(InputAction.CallbackContext context)
     {
-        if (context.performed)
+        if(context.performed)
         {
             LobbyController lobbyController = FindObjectOfType<LobbyController>();
             if (lobbyController != null && !lobbyController.HasStartedGame())
@@ -1057,7 +1070,7 @@ public class PlayerController : NetworkBehaviour
 
     private void Update()
     {
-        getAvailableActions();
+        GetAvailableActions();
 
         if (Input.GetKeyDown(KeyCode.C) && IsOwner)
         {
@@ -1120,6 +1133,27 @@ public class PlayerController : NetworkBehaviour
         {
             if (UIGameController.Instance != null)
                 UIGameController.Instance.ToggleSettingsMenuVisibility();
+        }
+    }
+
+    public void NotifyTurn(bool myTurn)
+    {
+        if (IsServer)
+        {
+            isMyTurn.Value = myTurn;
+        }
+
+        if (IsOwner)
+        {
+            if (myTurn)
+            {
+                Debug.Log($"[PlayerController] It's your turn ({OwnerClientId})");
+                GetAvailableActions();
+            }
+            else
+            {
+                ResetActionText();
+            }
         }
     }
 }

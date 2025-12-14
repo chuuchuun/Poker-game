@@ -14,6 +14,16 @@ public class ModeSelectionScreen : MonoBehaviour
         FlowCoordinator = modeSelectionFlowCoordinator;
     }
 
+    private void Awake()
+    {
+        FlowCoordinator.OnEnable();
+    }
+
+    private void OnDestroy()
+    {
+        FlowCoordinator.OnDisable();
+    }
+
     public void SingleplayerMode() {
         FlowCoordinator.SingleplayerMode();
     }
