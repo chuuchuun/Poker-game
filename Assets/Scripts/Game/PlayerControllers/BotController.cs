@@ -10,7 +10,6 @@ public class BotController : NetworkBehaviour, IPlayerController
     public ulong PlayerId => playeridBacking;
     private ulong playeridBacking;
 
-    // Exposed backing field kept for compatibility
     public ulong playerId
     {
         get => playeridBacking;
@@ -85,6 +84,9 @@ public class BotController : NetworkBehaviour, IPlayerController
     [SerializeField] private GameObject balancePrefab;
 
     private bool isThinking = false;
+    private float aiAggressiveness = 0.6f;
+    private float aiBluffChance = 0.08f;
+    private BotAI botAi;
 
     public override void OnNetworkSpawn()
     {
@@ -92,6 +94,25 @@ public class BotController : NetworkBehaviour, IPlayerController
             playeridBacking = OwnerClientId;
 
         networkBalance.OnValueChanged += OnNetworkBalanceChanged;
+
+        int preset = UnityEngine.Random.Range(0, 3);
+        switch (preset)
+        {
+            case 0: // conservative
+                aiAggressiveness = UnityEngine.Random.Range(0.15f, 0.35f);
+                aiBluffChance = UnityEngine.Random.Range(0.02f, 0.06f);
+                break;
+            case 1: // balanced
+                aiAggressiveness = UnityEngine.Random.Range(0.45f, 0.65f);
+                aiBluffChance = UnityEngine.Random.Range(0.06f, 0.12f);
+                break;
+            default: // aggressive
+                aiAggressiveness = UnityEngine.Random.Range(0.75f, 0.95f);
+                aiBluffChance = UnityEngine.Random.Range(0.10f, 0.20f);
+                break;
+        }
+
+        botAi = new BotAI(aiAggressiveness, aiBluffChance);
 
         if (IsServer)
         {
@@ -287,6 +308,25 @@ public class BotController : NetworkBehaviour, IPlayerController
     {
         var roundModel = FindObjectOfType<RoundModel>();
         if (roundModel == null) return;
+
+        if (botAi != null)
+        {
+            var decision = botAi.DecideAction(this, roundModel);
+            Debug.Log($"[BotController] Bot {playerId} decided action {decision.action} with raise {decision.raiseAmount} (Agg:{aiAggressiveness} Bluff:{aiBluffChance})");
+
+            switch (decision.action)
+            {
+                case BetAction.raise:
+                case BetAction.reRaise:
+                    Act(decision.action, decision.raiseAmount);
+                    break;
+                default:
+                    Act(decision.action);
+                    break;
+            }
+
+            return;
+        }
 
         int highest = roundModel.GetCurrentHighestBet();
         int requiredToCall = Math.Max(0, highest - currentBet);

@@ -13,7 +13,7 @@ public class LobbyController : NetworkBehaviour
     public bool HasStartedGame()
     {
         return hasStartedGame.Value;
-    }
+    } 
 
     public override void OnNetworkSpawn()
     {
