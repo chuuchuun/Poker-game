@@ -486,6 +486,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
     private bool TradeUp(ChipColor color)
     {
+        // Use TryGetValue to avoid key exceptions and be explicit about rules
         Dictionary<ChipColor, ChipColor[]> tradeRules = new Dictionary<ChipColor, ChipColor[]>()
         {
             { ChipColor.black, new[] { ChipColor.red, ChipColor.red, ChipColor.green } },
@@ -493,8 +494,8 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
         };
 
-        var chipsToRemove = tradeRules[color];
-        if (chipsToRemove == null) return false;
+        if (!tradeRules.TryGetValue(color, out var chipsToRemove))
+            return false;
 
         foreach (var chipToRemove in chipsToRemove)
         {
@@ -529,8 +530,8 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
         };
 
-        var chipsToRemove = tradeRules[color];
-        if (chipsToRemove == null) return false;
+        if (!tradeRules.TryGetValue(color, out var chipsToRemove))
+            return false;
 
         foreach (var chipToRemove in chipsToRemove)
         {
@@ -547,11 +548,12 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         int value;
         GameObject prefab;
 
+        // fixed chip values for colors (green = 5, blue = 1)
         (value, prefab) = color switch {
             ChipColor.black => (25, chipPrefabBlack),
             ChipColor.red => (10, chipPrefabRed),
-            ChipColor.green => (25, chipPrefabGreen),
-            ChipColor.blue => (10, chipPrefabBlue)
+            ChipColor.green => (5, chipPrefabGreen),
+            ChipColor.blue => (1, chipPrefabBlue)
         };
 
         SpawnChips(color, value, 1, prefab);
@@ -560,7 +562,18 @@ public class PlayerController : NetworkBehaviour, IPlayerController
     private void RemoveChipInstance(ChipColor color)
     {
         var chip = DropChip(color);
-        chip.NetworkObject.Despawn(true);
+        if (chip == null) return;
+
+        var netObj = chip.GetComponent<NetworkObject>();
+        if (netObj != null && netObj.IsSpawned)
+        {
+            netObj.Despawn(true);
+        }
+        else
+        {
+            // fallback to destroy if not a networked object
+            Destroy(chip.gameObject);
+        }
     }
 
     public List<ChipModel> RemoveChip(int bet)
@@ -605,23 +618,35 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         {
             case ChipColor.black:
                 var blackChip = blackChips.FirstOrDefault();
-                blackChips.Remove(blackChip);
-                totalChips.Remove(blackChip);
+                if (blackChip != null)
+                {
+                    blackChips.Remove(blackChip);
+                    totalChips.Remove(blackChip);
+                }
                 return blackChip;
             case ChipColor.red:
                 var redChip = redChips.FirstOrDefault();
-                redChips.Remove(redChip);
-                totalChips.Remove(redChip);
+                if (redChip != null)
+                {
+                    redChips.Remove(redChip);
+                    totalChips.Remove(redChip);
+                }
                 return redChip;
             case ChipColor.green:
                 var greenChip = greenChips.FirstOrDefault();
-                greenChips.Remove(greenChip);
-                totalChips.Remove(greenChip);
+                if (greenChip != null)
+                {
+                    greenChips.Remove(greenChip);
+                    totalChips.Remove(greenChip);
+                }
                 return greenChip;
             case ChipColor.blue:
                 var blueChip = blueChips.FirstOrDefault();
-                blueChips.Remove(blueChip);
-                totalChips.Remove(blueChip);
+                if (blueChip != null)
+                {
+                    blueChips.Remove(blueChip);
+                    totalChips.Remove(blueChip);
+                }
                 return blueChip;
             default:
                 return null;
@@ -675,16 +700,20 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             chip.stackPosition.Value = stackPosition;
             chip.ownerClientId.Value = 0;
             chip.networkPosition.Value = new Vector3(0, stackPosition * 0.1f, 0);
-            chip.parentNetworkId.Value = targetParent.GetComponent<NetworkObject>().NetworkObjectId;
+            if (targetParent.GetComponent<NetworkObject>() != null)
+                chip.parentNetworkId.Value = targetParent.GetComponent<NetworkObject>().NetworkObjectId;
+            else
+                chip.parentNetworkId.Value = 0;
 
             MoveChipToBank(chip, targetParent, stackPosition);
 
-            UpdateChipPositionClientRpc(chip.chipId, targetParent.GetInstanceID(), stackPosition);
+            // pass color index instead of instance id to clients to avoid instance id mismatch across processes
+            UpdateChipPositionClientRpc(chip.chipId, (int)chip.color, stackPosition);
         }
     }
 
     [ClientRpc]
-    private void UpdateChipPositionClientRpc(int chipId, int bankInstanceId, int stackPosition)
+    private void UpdateChipPositionClientRpc(int chipId, int colorIndex, int stackPosition)
     {
         var chip = FindObjectsOfType<ChipModel>().FirstOrDefault(c => c.chipId == chipId);
         if (chip == null)
@@ -693,14 +722,22 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             return;
         }
 
-        var bank = FindObjectsOfType<Transform>().FirstOrDefault(t => t.GetInstanceID() == bankInstanceId);
+        var bank = GameObject.FindGameObjectWithTag("chip_bank")?.transform;
         if (bank == null)
         {
-            Debug.LogWarning($"Bank {bankInstanceId} not found on client");
+            Debug.LogWarning($"chip_bank not found on client");
             return;
         }
 
-        chip.transform.SetParent(bank);
+        string colorName = ((ChipColor)colorIndex).ToString();
+        var colorParent = bank.Find(colorName);
+        if (colorParent == null)
+        {
+            Debug.LogWarning($"Bank color '{colorName}' not found under chip_bank on client");
+            return;
+        }
+
+        chip.transform.SetParent(colorParent);
         chip.transform.localPosition = new Vector3(0, stackPosition * 0.005f, 0);
         chip.transform.localRotation = Quaternion.identity;
     }

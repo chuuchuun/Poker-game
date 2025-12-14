@@ -99,6 +99,7 @@ public class BettingControlBehavior : NetworkBehaviour
         if (action.TypeId == ActionType.CALL)
         {
             Debug.LogWarning($"CALL: requiredToCall={requiredToCall}, playerBalance={player.CurrentBalance}, currentHighestBet={currentHighestBet}, playerCurrentBet={player.CurrentBet}");
+
             if (requiredToCall <= player.CurrentBalance)
             {
                 var movedChips = player.RemoveChip(requiredToCall);
@@ -113,7 +114,26 @@ public class BettingControlBehavior : NetworkBehaviour
                     currentBank += requiredToCall;
                     return true;
                 }
+                return false;
             }
+
+            if (player.CurrentBalance > 0)
+            {
+                int allInAmount = player.CurrentBalance;
+                var movedChips = player.RemoveChip(allInAmount);
+                if (movedChips != null)
+                {
+                    bankChips.AddRange(movedChips);
+                    player.CurrentBalance -= allInAmount;
+                    player.CurrentBet += allInAmount;
+                    state.currentBalance = player.CurrentBalance;
+                    state.currentBet = player.CurrentBet;
+                    playerStates[index] = state;
+                    currentBank += allInAmount;
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -128,11 +148,32 @@ public class BettingControlBehavior : NetworkBehaviour
                     player.CurrentBalance -= action.NewBet;
                     player.CurrentBet += action.NewBet;
                     state.currentBalance = player.CurrentBalance;
-                    state.currentBet += action.NewBet;
+                    state.currentBet = player.CurrentBet;
                     playerStates[index] = state;
                     currentBank += action.NewBet;
 
-                    currentHighestBet = state.currentBet;
+                    currentHighestBet = Mathf.Max(currentHighestBet, state.currentBet);
+
+                    return true;
+                }
+                return false;
+            }
+
+            if (player.CurrentBalance > 0)
+            {
+                int allInAmount = player.CurrentBalance;
+                var movedChips = player.RemoveChip(allInAmount);
+                if (movedChips != null)
+                {
+                    bankChips.AddRange(movedChips);
+                    player.CurrentBalance -= allInAmount;
+                    player.CurrentBet += allInAmount;
+                    state.currentBalance = player.CurrentBalance;
+                    state.currentBet = player.CurrentBet;
+                    playerStates[index] = state;
+                    currentBank += allInAmount;
+
+                    currentHighestBet = Mathf.Max(currentHighestBet, state.currentBet);
 
                     return true;
                 }

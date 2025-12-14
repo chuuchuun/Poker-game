@@ -41,10 +41,11 @@ public class RoundModel : NetworkBehaviour
         StartRound();
     }
 
-    private void StartRound()
+    public void StartRound()
     {
         roundStage = RoundStage.GAME;
         UpdatePlayers();
+        deckControlBehavior.DealCards(playerModels);
 
         bettingController.InitializeBetting(playerModels);
 
@@ -54,6 +55,46 @@ public class RoundModel : NetworkBehaviour
         }
 
         queueControlBehavior.StartRound();
+    }
+
+    public void StartGame(ulong[] playerIds, ulong firstPlayerId)
+    {
+        roundStage = RoundStage.GAME;
+        UpdatePlayers();
+
+        var orderedPlayerModels = new List<IPlayerController>();
+        foreach (var id in playerIds)
+        {
+            var pm = playerModels.FirstOrDefault(p => p.PlayerId == id);
+            if (pm == null)
+            {
+                var netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(id);
+                if (netObj != null)
+                    pm = netObj.GetComponents<MonoBehaviour>().OfType<IPlayerController>().FirstOrDefault();
+            }
+            if (pm != null)
+                orderedPlayerModels.Add(pm);
+        }
+
+        foreach (var pm in playerModels)
+        {
+            if (!orderedPlayerModels.Contains(pm))
+                orderedPlayerModels.Add(pm);
+        }
+
+
+        deckControlBehavior.DealCards(orderedPlayerModels);
+
+        IPlayerController firstPlayer = orderedPlayerModels.FirstOrDefault(p => p.PlayerId == firstPlayerId)
+            ?? NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(firstPlayerId)?
+                .GetComponents<MonoBehaviour>()
+                .OfType<IPlayerController>()
+                .FirstOrDefault();
+
+        queueControlBehavior.SetPlayers(orderedPlayerModels);
+        queueControlBehavior.SetFirstPlayerToMove(firstPlayer);
+
+        StartRound();
     }
 
     private void UpdatePlayers()

@@ -38,15 +38,10 @@ public class MatchController : NetworkBehaviour
                 {
                     netObj.Spawn();
                     Debug.Log("Spawned existing RoundModel");
-                }   
+                }
                 roundModel.StartGame(players.ToArray(), players[startingPlayer]);
 
             }
         }
-    }
-
-    public void RoundEnded()
-    {
-
     }
 }

@@ -85,6 +85,8 @@ public class QueueControlBehavior : NetworkBehaviour
         var bbState = queuedPlayers[(index + queuedPlayers.Count - 1) % queuedPlayers.Count];
 
         bettingControlBehavior.SetBlinds(sbState.player?.PlayerId ?? 0UL, bbState.player?.PlayerId ?? 0UL);
+
+        waitingForTurnPlayer?.NotifyTurn(true);
     }
 
     private void EndRound()
@@ -95,7 +97,7 @@ public class QueueControlBehavior : NetworkBehaviour
             return;
         }
 
-        int index = queuedPlayers.FindIndex(s => s.player != null && firstPlayer != null && s.player.PlayerId == firstPlayer.PlayerId);
+        int index = queuedPlayers.FindIndex(s => s.player == firstPlayer);
         if (index == -1)
             index = 0;
 
