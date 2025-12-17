@@ -19,6 +19,6 @@ public class DifficultyScreenFlowCoordinatorImpl: DifficultyScreenFlowCoordinato
     public void BackToModeSelection()
     {
         Debug.Log("Back to mode selection");
-        //SceneManager.LoadScene("ModeSelectionScreen");
+        SceneManager.LoadScene("ModeSelectionScreen");
     }
 }
