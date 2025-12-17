@@ -19,6 +19,7 @@ TagManager:
   - deck
   - balance_tag
   - balance_canvas
+  - chips_text
   layers:
   - Default
   - TransparentFX
