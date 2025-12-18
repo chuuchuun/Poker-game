@@ -77,12 +77,21 @@ public class PlayerController : NetworkBehaviour, IPlayerController
     public List<CardModel> cardsInHand = new List<CardModel>();
     public List<Transform> cardSlots = new List<Transform>();
 
+<<<<<<< HEAD
     private TMP_Text callText;
     private TMP_Text checkText;
     private TMP_Text foldText;
     private TMP_Text raiseText;
     private TMP_Text reraiseText;
     private TMP_Text chipsText;
+=======
+    public TMP_Text callText;
+    public TMP_Text checkText;
+    public TMP_Text foldText;
+    public TMP_Text raiseText;
+    public TMP_Text reraiseText;
+    public TMP_Text chipsText;
+>>>>>>> a868526 (fixed conflicts)
 
     private bool isRoundStarted = false;
     private int spawnIndex = -1;
