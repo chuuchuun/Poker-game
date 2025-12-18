@@ -83,7 +83,7 @@ public class MultiplayerScreenFlowCoordinatorImpl : MultiplayerScreenFlowCoordin
     public void BackToModeSelection()
     {
         Debug.Log("Back to mode selection method called.");
-        SceneManager.LoadScene("ModeSelectionScene");
+        SceneManager.LoadScene("ModeSelectionScreen");
     }
     public List<LobbyInfo> GetAvailableLobbies()
     {

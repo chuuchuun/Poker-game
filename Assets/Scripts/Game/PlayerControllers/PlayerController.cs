@@ -78,10 +78,18 @@ public class PlayerController : NetworkBehaviour, IPlayerController
     public List<Transform> cardSlots = new List<Transform>();
 
     private TMP_Text callText;
+<<<<<<< HEAD:Assets/Scripts/Game/PlayerControllers/PlayerController.cs
     private TMP_Text checkText;
     private TMP_Text foldText;
     private TMP_Text raiseText;
     private TMP_Text reraiseText;
+=======
+    public TMP_Text checkText;
+    public TMP_Text foldText;
+    public TMP_Text raiseText;
+    public TMP_Text reraiseText;
+    public TMP_Text chipsText;
+>>>>>>> 6337ade (added chips text):Assets/Scripts/Game/PlayerController.cs
 
     private bool isRoundStarted = false;
     private int spawnIndex = -1;
@@ -129,6 +137,8 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             currentBalance = newValue;
             OnBalanceChanged?.Invoke(newValue);
         }
+        chipsText.text = $"Balance: {currentBalance}";
+
     }
 
     private void FindMyChips()
@@ -154,6 +164,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
                 }
             }
         }
+        chipsText.text = $"Balance: {currentBalance}";
 
         Debug.Log($"[CLIENT {NetworkManager.Singleton.LocalClientId}] Chips found: {totalChips.Count}");
     }
@@ -832,6 +843,9 @@ public class PlayerController : NetworkBehaviour, IPlayerController
                     break;
                 case "reraise_text":
                     reraiseText = text;
+                    break;
+                case "chips_text":
+                    chipsText = text;
                     break;
             }
         }

@@ -1,7 +1,9 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class MainMenuFlowCoordinatorImpl: MainMenuFlowCoordinator {
     public void ShowPlayScreen() {
+        SceneManager.LoadScene("ModeSelectionScreen");
         Debug.Log("Play screen show");
     }
 
