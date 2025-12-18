@@ -11,7 +11,7 @@ public class DeckControlBehavior : NetworkBehaviour
     private NetworkList<NetworkObjectReference> deck;
     private GameObject[] cardSlots;
     private GameObject[] foldSlots;
-    private PlayerController[] players;
+    private IPlayerController[] players;
 
     private void Awake()
     {
@@ -100,7 +100,7 @@ public class DeckControlBehavior : NetworkBehaviour
             .ToArray();
     }
 
-    public void DealCards(List<PlayerController> playerModels)
+    public void DealCards(List<IPlayerController> playerModels)
     {
         if (!IsServer) return;
 
@@ -112,11 +112,11 @@ public class DeckControlBehavior : NetworkBehaviour
         }
     }
 
-    private void DealToPlayer(PlayerController player)
+    private void DealToPlayer(IPlayerController player)
     {
         if (!IsServer) return;
 
-        int cardsNeeded = 2 - player.cardsInHand.Count;
+        int cardsNeeded = 2 - player.CardsInHand.Count;
 
         for (int i = 0; i < cardsNeeded; i++)
         {
@@ -126,9 +126,10 @@ public class DeckControlBehavior : NetworkBehaviour
             if (cardRef.TryGet(out NetworkObject cardObject))
             {
                 CardModel card = cardObject.GetComponent<CardModel>();
-                player.cardsInHand.Add(card);
+                player.CardsInHand.Add(card);
                 deck.Remove(cardRef);
 
+                // Use the player's NetworkObject for the RPC reference
                 UpdateCardPositionClientRpc(
                     cardRef,
                     new NetworkObjectReference(player.NetworkObject),
@@ -165,9 +166,9 @@ public class DeckControlBehavior : NetworkBehaviour
             }
         }
 
-        foreach (PlayerController player in players)
+        foreach (IPlayerController player in players)
         {
-            player.cardsInHand.Clear();
+            player.CardsInHand.Clear();
         }
     }
 
@@ -261,8 +262,9 @@ public class DeckControlBehavior : NetworkBehaviour
 
     public void ReturnCard(CardModel card)
     {
-        PlayerController player = FindObjectsOfType<PlayerController>()
-            .FirstOrDefault(p => p.cardsInHand.Contains(card));
+        IPlayerController player = FindObjectsOfType<MonoBehaviour>()
+            .OfType<IPlayerController>()
+            .FirstOrDefault(p => p.CardsInHand.Contains(card));
 
         if (player != null)
         {
@@ -292,10 +294,10 @@ public class DeckControlBehavior : NetworkBehaviour
     {
         if (cardRef.TryGet(out NetworkObject cardObject) && playerRef.TryGet(out NetworkObject playerObject))
         {
-            PlayerController player = playerObject.GetComponent<PlayerController>();
-            if (player != null && slotIndex < player.cardSlots.Count)
+            IPlayerController player = playerObject.GetComponents<MonoBehaviour>().OfType<IPlayerController>().FirstOrDefault();
+            if (player != null && slotIndex < player.CardSlots.Count)
             {
-                Transform slot = player.cardSlots[slotIndex];
+                Transform slot = player.CardSlots[slotIndex];
                 cardObject.transform.SetParent(slot);
                 cardObject.transform.position = slot.position;
                 cardObject.transform.rotation = isFaceDown ? Quaternion.Euler(0, 180f, 0) : Quaternion.identity;

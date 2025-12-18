@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using System.Linq;
 
 public class SettingsMenuController : MonoBehaviour
 {
@@ -88,8 +89,8 @@ public class SettingsMenuController : MonoBehaviour
 
     public void ExitLobby()
     {
-        PlayerController localPlayer = FindObjectOfType<PlayerController>();
-        if (localPlayer != null && localPlayer.IsOwner)
+        var localPlayer = FindObjectsOfType<MonoBehaviour>().OfType<IPlayerController>().FirstOrDefault(p => p.IsOwner);
+        if (localPlayer != null)
         {
             localPlayer.Act(BetAction.fold);
             Debug.Log("Local player folded before leaving the lobby.");

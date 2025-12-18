@@ -1,3 +1,4 @@
+using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -7,7 +8,9 @@ public class BalanceCanvasController : MonoBehaviour
     [Header("3D Canvas Settings")]
     [SerializeField] private Canvas balanceCanvas;
     [SerializeField] private TMP_Text balanceText;
-    [SerializeField] private PlayerController playerController;
+
+    [SerializeField] private MonoBehaviour playerControllerBehaviour;
+    private IPlayerController playerController;
 
     [Header("Visual Settings")]
     [SerializeField] private Vector3 canvasOffset = new Vector3(0, 2f, 0);
@@ -68,7 +71,19 @@ public class BalanceCanvasController : MonoBehaviour
 
     private void FindMissingReferences()
     {
-        playerController ??= GetComponentInParent<PlayerController>();
+        // If inspector-assigned behaviour implements IPlayerController, use it.
+        if (playerControllerBehaviour != null && playerControllerBehaviour is IPlayerController ic)
+        {
+            playerController = ic;
+        }
+        else
+        {
+            // Otherwise search parents for any MonoBehaviour that implements IPlayerController
+            var comps = GetComponentsInParent<MonoBehaviour>(includeInactive: true);
+            playerController = comps.OfType<IPlayerController>().FirstOrDefault();
+            playerControllerBehaviour = (playerController as MonoBehaviour);
+        }
+
         mainCamera ??= FindObjectOfType<Camera>();
     }
 
@@ -117,15 +132,19 @@ public class BalanceCanvasController : MonoBehaviour
 
     private void UpdateCanvasPosition()
     {
-        if (playerController != null && balanceCanvas != null)
+        // Need a Transform - attempt to use the MonoBehaviour backing the interface
+        var mb = playerController as MonoBehaviour ?? playerControllerBehaviour;
+        if (mb != null && balanceCanvas != null)
         {
-            balanceCanvas.transform.position = playerController.transform.position + canvasOffset;
+            balanceCanvas.transform.position = mb.transform.position + canvasOffset;
         }
     }
 
-    public void Initialize(PlayerController controller, Canvas canvas = null, TMP_Text text = null)
+    // Accept IPlayerController so callers can pass PlayerController or BotController
+    public void Initialize(IPlayerController controller, Canvas canvas = null, TMP_Text text = null)
     {
         playerController = controller;
+        playerControllerBehaviour = controller as MonoBehaviour;
         balanceCanvas = canvas ?? balanceCanvas;
         balanceText = text ?? balanceText;
 
@@ -140,14 +159,15 @@ public class BalanceCanvasController : MonoBehaviour
         {
             int displayBalance = playerController.CurrentBalance;
             UpdateBalanceDisplay(displayBalance);
-            Debug.Log($"Canvas initialized with balance: {displayBalance} for player {playerController.OwnerClientId}");
+            Debug.Log($"Canvas initialized with balance: {displayBalance} for player {playerController.PlayerId}");
         }
     }
+
     public void HandleBalanceChanged(int newBalance)
     {
         currentBalance = newBalance;
         UpdateBalanceDisplay(newBalance);
-        Debug.Log($"Balance changed to: {newBalance} for player {playerController?.OwnerClientId}");
+        Debug.Log($"Balance changed to: {newBalance} for player {playerController?.PlayerId}");
 
         if (isMouseOver)
         {
@@ -170,7 +190,7 @@ public class BalanceCanvasController : MonoBehaviour
 
     public void ShowBalance()
     {
-        if (balanceCanvas != null)
+        if (balanceCanvas != null && playerController != null)
         {
             UpdateBalanceDisplay(playerController.CurrentBalance);
             UpdateCanvasPosition();

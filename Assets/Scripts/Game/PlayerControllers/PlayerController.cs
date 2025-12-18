@@ -8,8 +8,20 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : NetworkBehaviour
+public class PlayerController : NetworkBehaviour, IPlayerController
 {
+    QueueControlBehavior queueControlBehavior => GetComponent<QueueControlBehavior>();
+    public ulong PlayerId => playerId;
+    public int CurrentBet
+    {
+        get => currentBet;
+        set => currentBet = value;
+    }
+
+    public List<CardModel> CardsInHand => cardsInHand;
+    public List<Transform> CardSlots => cardSlots;
+
+    public List<ChipModel> TotalChips => totalChips;
     public ulong playerId;
     private PlayerInput input;
     public List<ChipModel> totalChips = new List<ChipModel>();
@@ -66,10 +78,10 @@ public class PlayerController : NetworkBehaviour
     public List<Transform> cardSlots = new List<Transform>();
 
     private TMP_Text callText;
-    public TMP_Text checkText;
-    public TMP_Text foldText;
-    public TMP_Text raiseText;
-    public TMP_Text reraiseText;
+    private TMP_Text checkText;
+    private TMP_Text foldText;
+    private TMP_Text raiseText;
+    private TMP_Text reraiseText;
 
     private bool isRoundStarted = false;
     private int spawnIndex = -1;
@@ -236,9 +248,10 @@ public class PlayerController : NetworkBehaviour
         return this.spawnIndex;
     }
 
-    public List<BetAction> getAvailableActions()
+    public List<BetAction> GetAvailableActions()
     {
         ResetActionText();
+        if (!isMyTurn.Value) return new List<BetAction>();
         List<BetAction> availableActions = new List<BetAction>
         {
             BetAction.check,
@@ -306,13 +319,13 @@ public class PlayerController : NetworkBehaviour
 
         IPlayerAction playerAction = action switch
         {
-            BetAction.check => new CheckAction(currentBet),
-            BetAction.fold => new FoldAction(currentBet),
-            BetAction.call => new CallAction(roundModel.GetCurrentHighestBet()),
-            BetAction.raise => new RaiseAction(newBet),
-            BetAction.reRaise => new ReRaiseAction(newBet),
-            BetAction.start => new SkipAction(0),
-            _ => new SkipAction(currentBet)
+            BetAction.check => new CheckAction(currentBet, this),
+            BetAction.fold => new FoldAction(currentBet, this),
+            BetAction.call => new CallAction(roundModel.GetCurrentHighestBet(), this),
+            BetAction.raise => new RaiseAction(newBet, this),
+            BetAction.reRaise => new ReRaiseAction(newBet, this),
+            BetAction.start => new SkipAction(0, this),
+            _ => new SkipAction(currentBet, this)
         };
 
         roundModel.TryToMakePlayerAction(playerAction);
@@ -329,9 +342,9 @@ public class PlayerController : NetworkBehaviour
             {
                 IPlayerAction playerAction = pendingAction switch
                 {
-                    BetAction.raise => new RaiseAction(betAmount),
-                    BetAction.reRaise => new ReRaiseAction(betAmount),
-                    _ => new SkipAction(currentBet)
+                    BetAction.raise => new RaiseAction(betAmount, this),
+                    BetAction.reRaise => new ReRaiseAction(betAmount, this),
+                    _ => new SkipAction(currentBet, this)
                 };
 
                 roundModel.TryToMakePlayerAction(playerAction);
@@ -473,6 +486,7 @@ public class PlayerController : NetworkBehaviour
 
     private bool TradeUp(ChipColor color)
     {
+        // Use TryGetValue to avoid key exceptions and be explicit about rules
         Dictionary<ChipColor, ChipColor[]> tradeRules = new Dictionary<ChipColor, ChipColor[]>()
         {
             { ChipColor.black, new[] { ChipColor.red, ChipColor.red, ChipColor.green } },
@@ -480,8 +494,8 @@ public class PlayerController : NetworkBehaviour
             { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
         };
 
-        var chipsToRemove = tradeRules[color];
-        if (chipsToRemove == null) return false;
+        if (!tradeRules.TryGetValue(color, out var chipsToRemove))
+            return false;
 
         foreach (var chipToRemove in chipsToRemove)
         {
@@ -516,8 +530,8 @@ public class PlayerController : NetworkBehaviour
             { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
         };
 
-        var chipsToRemove = tradeRules[color];
-        if (chipsToRemove == null) return false;
+        if (!tradeRules.TryGetValue(color, out var chipsToRemove))
+            return false;
 
         foreach (var chipToRemove in chipsToRemove)
         {
@@ -534,11 +548,12 @@ public class PlayerController : NetworkBehaviour
         int value;
         GameObject prefab;
 
+        // fixed chip values for colors (green = 5, blue = 1)
         (value, prefab) = color switch {
             ChipColor.black => (25, chipPrefabBlack),
             ChipColor.red => (10, chipPrefabRed),
-            ChipColor.green => (25, chipPrefabGreen),
-            ChipColor.blue => (10, chipPrefabBlue)
+            ChipColor.green => (5, chipPrefabGreen),
+            ChipColor.blue => (1, chipPrefabBlue)
         };
 
         SpawnChips(color, value, 1, prefab);
@@ -547,7 +562,18 @@ public class PlayerController : NetworkBehaviour
     private void RemoveChipInstance(ChipColor color)
     {
         var chip = DropChip(color);
-        chip.NetworkObject.Despawn(true);
+        if (chip == null) return;
+
+        var netObj = chip.GetComponent<NetworkObject>();
+        if (netObj != null && netObj.IsSpawned)
+        {
+            netObj.Despawn(true);
+        }
+        else
+        {
+            // fallback to destroy if not a networked object
+            Destroy(chip.gameObject);
+        }
     }
 
     public List<ChipModel> RemoveChip(int bet)
@@ -592,23 +618,35 @@ public class PlayerController : NetworkBehaviour
         {
             case ChipColor.black:
                 var blackChip = blackChips.FirstOrDefault();
-                blackChips.Remove(blackChip);
-                totalChips.Remove(blackChip);
+                if (blackChip != null)
+                {
+                    blackChips.Remove(blackChip);
+                    totalChips.Remove(blackChip);
+                }
                 return blackChip;
             case ChipColor.red:
                 var redChip = redChips.FirstOrDefault();
-                redChips.Remove(redChip);
-                totalChips.Remove(redChip);
+                if (redChip != null)
+                {
+                    redChips.Remove(redChip);
+                    totalChips.Remove(redChip);
+                }
                 return redChip;
             case ChipColor.green:
                 var greenChip = greenChips.FirstOrDefault();
-                greenChips.Remove(greenChip);
-                totalChips.Remove(greenChip);
+                if (greenChip != null)
+                {
+                    greenChips.Remove(greenChip);
+                    totalChips.Remove(greenChip);
+                }
                 return greenChip;
             case ChipColor.blue:
                 var blueChip = blueChips.FirstOrDefault();
-                blueChips.Remove(blueChip);
-                totalChips.Remove(blueChip);
+                if (blueChip != null)
+                {
+                    blueChips.Remove(blueChip);
+                    totalChips.Remove(blueChip);
+                }
                 return blueChip;
             default:
                 return null;
@@ -662,16 +700,20 @@ public class PlayerController : NetworkBehaviour
             chip.stackPosition.Value = stackPosition;
             chip.ownerClientId.Value = 0;
             chip.networkPosition.Value = new Vector3(0, stackPosition * 0.1f, 0);
-            chip.parentNetworkId.Value = targetParent.GetComponent<NetworkObject>().NetworkObjectId;
+            if (targetParent.GetComponent<NetworkObject>() != null)
+                chip.parentNetworkId.Value = targetParent.GetComponent<NetworkObject>().NetworkObjectId;
+            else
+                chip.parentNetworkId.Value = 0;
 
             MoveChipToBank(chip, targetParent, stackPosition);
 
-            UpdateChipPositionClientRpc(chip.chipId, targetParent.GetInstanceID(), stackPosition);
+            // pass color index instead of instance id to clients to avoid instance id mismatch across processes
+            UpdateChipPositionClientRpc(chip.chipId, (int)chip.color, stackPosition);
         }
     }
 
     [ClientRpc]
-    private void UpdateChipPositionClientRpc(int chipId, int bankInstanceId, int stackPosition)
+    private void UpdateChipPositionClientRpc(int chipId, int colorIndex, int stackPosition)
     {
         var chip = FindObjectsOfType<ChipModel>().FirstOrDefault(c => c.chipId == chipId);
         if (chip == null)
@@ -680,14 +722,22 @@ public class PlayerController : NetworkBehaviour
             return;
         }
 
-        var bank = FindObjectsOfType<Transform>().FirstOrDefault(t => t.GetInstanceID() == bankInstanceId);
+        var bank = GameObject.FindGameObjectWithTag("chip_bank")?.transform;
         if (bank == null)
         {
-            Debug.LogWarning($"Bank {bankInstanceId} not found on client");
+            Debug.LogWarning($"chip_bank not found on client");
             return;
         }
 
-        chip.transform.SetParent(bank);
+        string colorName = ((ChipColor)colorIndex).ToString();
+        var colorParent = bank.Find(colorName);
+        if (colorParent == null)
+        {
+            Debug.LogWarning($"Bank color '{colorName}' not found under chip_bank on client");
+            return;
+        }
+
+        chip.transform.SetParent(colorParent);
         chip.transform.localPosition = new Vector3(0, stackPosition * 0.005f, 0);
         chip.transform.localRotation = Quaternion.identity;
     }
@@ -1041,7 +1091,7 @@ public class PlayerController : NetworkBehaviour
     }
     public void OnStart(InputAction.CallbackContext context)
     {
-        if (context.performed)
+        if(context.performed)
         {
             LobbyController lobbyController = FindObjectOfType<LobbyController>();
             if (lobbyController != null && !lobbyController.HasStartedGame())
@@ -1057,7 +1107,7 @@ public class PlayerController : NetworkBehaviour
 
     private void Update()
     {
-        getAvailableActions();
+        GetAvailableActions();
 
         if (Input.GetKeyDown(KeyCode.C) && IsOwner)
         {
@@ -1120,6 +1170,27 @@ public class PlayerController : NetworkBehaviour
         {
             if (UIGameController.Instance != null)
                 UIGameController.Instance.ToggleSettingsMenuVisibility();
+        }
+    }
+
+    public void NotifyTurn(bool myTurn)
+    {
+        if (IsServer)
+        {
+            isMyTurn.Value = myTurn;
+        }
+
+        if (IsOwner)
+        {
+            if (myTurn)
+            {
+                Debug.Log($"[PlayerController] It's your turn ({OwnerClientId})");
+                GetAvailableActions();
+            }
+            else
+            {
+                ResetActionText();
+            }
         }
     }
 }

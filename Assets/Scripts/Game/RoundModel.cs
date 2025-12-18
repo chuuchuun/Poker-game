@@ -18,7 +18,7 @@ public class RoundModel : NetworkBehaviour
     private DeckControlBehavior deckControlBehavior => GameManager.Instance.GetComponent<DeckControlBehavior>();
     private BettingControlBehavior bettingController => GameManager.Instance.GetComponent<BettingControlBehavior>();
 
-    private List<PlayerController> playerModels = new List<PlayerController>();
+    private List<IPlayerController> playerModels = new List<IPlayerController>();
     private RoundStage roundStage = RoundStage.PREPARATION;
 
     public override void OnNetworkSpawn()
@@ -33,15 +33,15 @@ public class RoundModel : NetworkBehaviour
 
     public int GetCurrentHighestBet() => bettingController.GetCurrentHighestBet();
 
-    public void StartGame(ulong[] playerIds, ulong firstPlayerId)
+    public void StartGame(IPlayerController[] players, IPlayerController firstPlayer)
     {
-        queueControlBehavior.SetFirstPlayerToMove(firstPlayerId);
-        queueControlBehavior.SetPlayers(playerIds.ToList());
+        queueControlBehavior.SetFirstPlayerToMove(firstPlayer);
+        queueControlBehavior.SetPlayers(players.ToList());
 
         StartRound();
     }
 
-    private void StartRound()
+    public void StartRound()
     {
         roundStage = RoundStage.GAME;
         UpdatePlayers();
@@ -51,20 +51,60 @@ public class RoundModel : NetworkBehaviour
 
         if (IsServer)
         {
-            SendRoundStartMessage(playerModels[0].playerId);
+            SendRoundStartMessage(playerModels[0].PlayerId);
         }
 
         queueControlBehavior.StartRound();
     }
 
+    public void StartGame(ulong[] playerIds, ulong firstPlayerId)
+    {
+        roundStage = RoundStage.GAME;
+        UpdatePlayers();
+
+        var orderedPlayerModels = new List<IPlayerController>();
+        foreach (var id in playerIds)
+        {
+            var pm = playerModels.FirstOrDefault(p => p.PlayerId == id);
+            if (pm == null)
+            {
+                var netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(id);
+                if (netObj != null)
+                    pm = netObj.GetComponents<MonoBehaviour>().OfType<IPlayerController>().FirstOrDefault();
+            }
+            if (pm != null)
+                orderedPlayerModels.Add(pm);
+        }
+
+        foreach (var pm in playerModels)
+        {
+            if (!orderedPlayerModels.Contains(pm))
+                orderedPlayerModels.Add(pm);
+        }
+
+
+        deckControlBehavior.DealCards(orderedPlayerModels);
+
+        IPlayerController firstPlayer = orderedPlayerModels.FirstOrDefault(p => p.PlayerId == firstPlayerId)
+            ?? NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(firstPlayerId)?
+                .GetComponents<MonoBehaviour>()
+                .OfType<IPlayerController>()
+                .FirstOrDefault();
+
+        queueControlBehavior.SetPlayers(orderedPlayerModels);
+        queueControlBehavior.SetFirstPlayerToMove(firstPlayer);
+
+        StartRound();
+    }
+
     private void UpdatePlayers()
     {
-        foreach (PlayerController player in FindObjectsOfType<PlayerController>())
+        foreach (var player in FindObjectsOfType<MonoBehaviour>().OfType<IPlayerController>())
         {
             if (!playerModels.Contains(player))
             {
                 playerModels.Add(player);
-                Debug.Log("New player added: " + player.name);
+                Debug.Log("New player added: " + (player as MonoBehaviour)?.name);
             }
         }
     }
@@ -84,8 +124,8 @@ public class RoundModel : NetworkBehaviour
         {
             List<CardModel> tableCards = deckControlBehavior.GetCardsOnTable();
             List<(ulong, List<CardModel>)> playerHands = playerModels
-                .Select(model => (model.playerId, model.cardsInHand))
-                .Where(p => !bettingController.HasPlayerFolded(p.playerId))
+                .Select(model => (model.PlayerId, model.CardsInHand))
+                .Where(p => !bettingController.HasPlayerFolded(p.PlayerId))
                 .ToList();
 
             List<ulong> winners = new List<ulong>();
@@ -150,9 +190,8 @@ public class RoundModel : NetworkBehaviour
 
         if (IsServer)
         {
-            ulong playerId = NetworkManager.Singleton.LocalClientId;
-            SendPlayerActionMessage(playerId, action);
-            ProcessPlayerAction(playerId, action);
+            SendPlayerActionMessage(action.Player.PlayerId, action);
+            ProcessPlayerAction(action.Player.PlayerId, action);
         }
         else
         {
@@ -173,6 +212,16 @@ public class RoundModel : NetworkBehaviour
         ulong senderId = rpcParams.Receive.SenderClientId;
         IPlayerAction action = networkAction.ToAction();
 
+        var netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(senderId);
+        if (netObj != null)
+        {
+            var actor = netObj.GetComponents<MonoBehaviour>().OfType<IPlayerController>().FirstOrDefault();
+            if (actor != null)
+            {
+                action.Player = actor;
+            }
+        }
+
         Debug.Log($"[SERVER] Received action type {networkAction.ActionType} with bet {networkAction.BetAmount} from {senderId}");
 
         SendPlayerActionMessage(senderId, action);
@@ -189,6 +238,17 @@ public class RoundModel : NetworkBehaviour
         if (!IsServer)
         {
             IPlayerAction action = networkAction.ToAction();
+
+            var netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(playerId);
+            if (netObj != null)
+            {
+                var actor = netObj.GetComponents<MonoBehaviour>().OfType<IPlayerController>().FirstOrDefault();
+                if (actor != null)
+                {
+                    action.Player = actor;
+                }
+            }
+
             ProcessPlayerAction(playerId, action);
         }
     }
@@ -199,10 +259,9 @@ public class RoundModel : NetworkBehaviour
 
         Debug.Log($"[RoundModel] Processing {action.GetType().Name} for player {playerId}");
 
-        if (!queueControlBehavior.ShouldAcceptActionFromPlayerWithId(playerId)) return;
+        IPlayerController player = action.Player;
 
-        var player = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(playerId)?.GetComponent<PlayerController>();
-        if (player == null) return;
+        if (!queueControlBehavior.ShouldAcceptActionFromPlayer(player)) return;
 
         bool actionSuccessful = bettingController.ProcessPlayerAction(playerId, action, player);
 
