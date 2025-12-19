@@ -106,7 +106,6 @@ public class BettingControlBehavior : NetworkBehaviour
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
-                    player.CurrentBalance -= requiredToCall;
                     player.CurrentBet += requiredToCall;
                     state.currentBalance = player.CurrentBalance;
                     state.currentBet = player.CurrentBet;
@@ -124,7 +123,6 @@ public class BettingControlBehavior : NetworkBehaviour
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
-                    player.CurrentBalance -= allInAmount;
                     player.CurrentBet += allInAmount;
                     state.currentBalance = player.CurrentBalance;
                     state.currentBet = player.CurrentBet;
@@ -145,7 +143,6 @@ public class BettingControlBehavior : NetworkBehaviour
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
-                    player.CurrentBalance -= action.NewBet;
                     player.CurrentBet += action.NewBet;
                     state.currentBalance = player.CurrentBalance;
                     state.currentBet = player.CurrentBet;
@@ -166,7 +163,6 @@ public class BettingControlBehavior : NetworkBehaviour
                 if (movedChips != null)
                 {
                     bankChips.AddRange(movedChips);
-                    player.CurrentBalance -= allInAmount;
                     player.CurrentBet += allInAmount;
                     state.currentBalance = player.CurrentBalance;
                     state.currentBet = player.CurrentBet;
