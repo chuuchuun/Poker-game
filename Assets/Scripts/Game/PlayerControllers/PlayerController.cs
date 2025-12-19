@@ -7,6 +7,7 @@ using Unity.Netcode;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 public class PlayerController : NetworkBehaviour, IPlayerController
 {
@@ -43,6 +44,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
     private BalanceCanvasController balanceCanvasController;
 
+    private bool isHidden = false;
 
     [SerializeField] private int currentBalance = 0;
     public int CurrentBalance
@@ -584,7 +586,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         }
         else
         {
-            // fallback to destroy if not a networked object
             Destroy(chip.gameObject);
         }
     }
@@ -720,7 +721,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
             MoveChipToBank(chip, targetParent, stackPosition);
 
-            // pass color index instead of instance id to clients to avoid instance id mismatch across processes
             UpdateChipPositionClientRpc(chip.chipId, (int)chip.color, stackPosition);
         }
     }
@@ -1210,42 +1210,118 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         }
     }
 
+    public void SetModelVisibility(bool visible)
+    {
+        if (isHidden == !visible) return;
+
+        var renderers = GetComponentsInChildren<Renderer>(true);
+        foreach (var r in renderers)
+        {
+            if (r.GetComponent<Camera>() != null) continue;
+            r.enabled = visible;
+        }
+
+        var canvases = GetComponentsInChildren<Canvas>(true);
+        foreach (var c in canvases)
+        {
+            c.enabled = visible;
+        }
+
+        var texts = GetComponentsInChildren<TMP_Text>(true);
+        foreach (var t in texts)
+        {
+            t.enabled = visible;
+        }
+
+        var colliders = GetComponentsInChildren<Collider>(true);
+        foreach (var col in colliders)
+        {
+            col.enabled = visible;
+        }
+
+        if (IsOwner && input != null)
+        {
+            input.enabled = visible;
+        }
+
+        isHidden = !visible;
+    }
+
     public void Kick()
     {
         Debug.Log($"Kick requested for player {PlayerId} (IsServer={IsServer}, IsOwner={IsOwner})");
 
         if (IsServer)
         {
-            if (GameManager.Instance != null)
+            try
             {
-                GameManager.Instance.DisconnectClient(PlayerId);
-                Debug.Log($"Player {PlayerId} disconnected by server.");
+                var round = GameManager.Instance?.GetComponent<RoundModel>();
+                if (round != null)
+                {
+                    round.RemovePlayerById(PlayerId);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Debug.LogWarning("GameManager.Instance is null; cannot disconnect player on server.");
+                Debug.LogWarning($"Failed to remove player references before hide: {ex.Message}");
             }
+
+            HidePlayerClientRpc(PlayerId);
+
+            Debug.Log($"Player {PlayerId} hidden by server (no disconnect).");
             return;
         }
 
-        // If not server, send a request to the server to perform the kick.
-        RequestKickServerRpc();
+        RequestHidePlayerServerRpc();
+        SetModelVisibility(false);
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void RequestKickServerRpc(ServerRpcParams rpcParams = default)
+    private void RequestHidePlayerServerRpc(ServerRpcParams rpcParams = default)
     {
         if (!IsServer) return;
 
-        // On server, use the PlayerId of this instance.
-        if (GameManager.Instance != null)
+        ulong senderId = rpcParams.Receive.SenderClientId;
+
+        try
         {
-            GameManager.Instance.DisconnectClient(PlayerId);
-            Debug.Log($"Player {PlayerId} disconnected by server (via RPC).");
+            var round = GameManager.Instance?.GetComponent<RoundModel>();
+            if (round != null)
+            {
+                round.RemovePlayerById(senderId);
+            }
         }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Failed to remove player references before hide (server RPC): {ex.Message}");
+        }
+
+        HidePlayerClientRpc(senderId);
+
+        Debug.Log($"Server received hide request and hid player {senderId} (no disconnect).");
+    }
+
+    [ClientRpc]
+    private void HidePlayerClientRpc(ulong targetPlayerId)
+    {
+        NetworkObject netObj = null;
+        if (NetworkManager.Singleton != null)
+        {
+            netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(targetPlayerId);
+        }
+
+        PlayerController pc = null;
+        if (netObj != null)
+            pc = netObj.GetComponent<PlayerController>();
         else
+            pc = FindObjectsOfType<PlayerController>().FirstOrDefault(p => p.PlayerId == targetPlayerId);
+
+        if (pc == null)
         {
-            Debug.LogWarning("GameManager.Instance is null; cannot disconnect player on server (via RPC).");
+            Debug.LogWarning($"HidePlayerClientRpc: player {targetPlayerId} not found on client.");
+            return;
         }
+
+        pc.SetModelVisibility(false);
     }
 }

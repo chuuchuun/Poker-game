@@ -314,28 +314,4 @@ public class DeckControlBehavior : NetworkBehaviour
             }
         }
     }
-
-    /// <summary>
-    /// Remove references to a player by id and return their cards to the deck.
-    /// </summary>
-    public void RemovePlayerById(ulong playerId)
-    {
-        if (players != null)
-        {
-            var toRemove = players.Where(p => p != null && p.PlayerId == playerId).ToArray();
-            foreach (var p in toRemove)
-            {
-                // Return cards that belong to this player back to deck/table appropriately
-                var cards = p.CardsInHand.ToList();
-                foreach (var c in cards)
-                {
-                    // ReturnCard will position card appropriately
-                    ReturnCard(c);
-                }
-                p.CardsInHand.Clear();
-            }
-
-            players = players.Where(p => p == null || p.PlayerId != playerId).ToArray();
-        }
-    }
 }

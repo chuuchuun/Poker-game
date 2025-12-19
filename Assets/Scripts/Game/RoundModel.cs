@@ -44,7 +44,6 @@ public class RoundModel : NetworkBehaviour
     public void StartRound()
     {
         roundStage = RoundStage.GAME;
-        UpdatePlayers();
         deckControlBehavior.DealCards(playerModels);
 
         bettingController.InitializeBetting(playerModels);
@@ -109,13 +108,8 @@ public class RoundModel : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// Remove all references to a player (by id) from round-related systems.
-    /// Call this when a player is kicked/disconnected.
-    /// </summary>
     public void RemovePlayerById(ulong playerId)
     {
-        // Find and remove from local list
         var pm = playerModels.FirstOrDefault(p => p.PlayerId == playerId);
         if (pm != null)
         {
@@ -127,7 +121,7 @@ public class RoundModel : NetworkBehaviour
             Debug.LogWarning($"[RoundModel] RemovePlayerById: player {playerId} not found in playerModels");
         }
 
-        // Inform other systems to remove references / cleanup
+
         try
         {
             bettingController?.RemovePlayerById(playerId);
@@ -146,16 +140,6 @@ public class RoundModel : NetworkBehaviour
             Debug.LogWarning($"[RoundModel] Error removing player from QueueControlBehavior: {ex.Message}");
         }
 
-        try
-        {
-            deckControlBehavior?.RemovePlayerById(playerId);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning($"[RoundModel] Error removing player from DeckControlBehavior: {ex.Message}");
-        }
-
-        // Update betting state on server after removal.
         if (IsServer)
         {
             UpdatePlayersState();
@@ -234,10 +218,11 @@ public class RoundModel : NetworkBehaviour
                     {
                         Debug.Log($"Kicking player {p.PlayerId} due to zero balance after round.");
                         p.Kick();
+                        RemovePlayerById(p.PlayerId);
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"Failed to kick player {p.PlayerId}: {ex.Message}");
+                        Debug.LogWarning($"Failed to kick/remove player {p.PlayerId}: {ex.Message}");
                     }
                 }
             }
@@ -249,7 +234,6 @@ public class RoundModel : NetworkBehaviour
             StartCoroutine(Delay(2, () =>
             {
                 roundStage = RoundStage.GAME;
-                UpdatePlayers();
                 deckControlBehavior.DealCards(playerModels);
 
                 bettingController.InitializeBetting(playerModels);

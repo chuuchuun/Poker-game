@@ -319,19 +319,13 @@ public class BettingControlBehavior : NetworkBehaviour
         return activePlayers;
     }
 
-    /// <summary>
-    /// Remove any references to a player by id from betting structures.
-    /// </summary>
     public void RemovePlayerById(ulong playerId)
     {
-        // Remove from controller lists
         playerControllers.RemoveAll(p => p != null && p.PlayerId == playerId);
         playersFolded.RemoveAll(p => p != null && p.PlayerId == playerId);
 
-        // Remove state entries
         playerStates.RemoveAll(s => s.id == playerId);
 
-        // Recalculate highest bet
         currentHighestBet = playerStates.Count > 0 ? playerStates.Max(s => s.currentBet) : 0;
     }
 }
