@@ -109,6 +109,59 @@ public class RoundModel : NetworkBehaviour
         }
     }
 
+    /// <summary>
+    /// Remove all references to a player (by id) from round-related systems.
+    /// Call this when a player is kicked/disconnected.
+    /// </summary>
+    public void RemovePlayerById(ulong playerId)
+    {
+        // Find and remove from local list
+        var pm = playerModels.FirstOrDefault(p => p.PlayerId == playerId);
+        if (pm != null)
+        {
+            playerModels.Remove(pm);
+            Debug.Log($"[RoundModel] Removed player {playerId} from RoundModel.playerModels");
+        }
+        else
+        {
+            Debug.LogWarning($"[RoundModel] RemovePlayerById: player {playerId} not found in playerModels");
+        }
+
+        // Inform other systems to remove references / cleanup
+        try
+        {
+            bettingController?.RemovePlayerById(playerId);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[RoundModel] Error removing player from BettingControlBehavior: {ex.Message}");
+        }
+
+        try
+        {
+            queueControlBehavior?.RemovePlayerById(playerId);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[RoundModel] Error removing player from QueueControlBehavior: {ex.Message}");
+        }
+
+        try
+        {
+            deckControlBehavior?.RemovePlayerById(playerId);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[RoundModel] Error removing player from DeckControlBehavior: {ex.Message}");
+        }
+
+        // Update betting state on server after removal.
+        if (IsServer)
+        {
+            UpdatePlayersState();
+        }
+    }
+
     public void EndRound()
     {
         if (roundStage != RoundStage.GAME) return;
@@ -125,7 +178,7 @@ public class RoundModel : NetworkBehaviour
             List<CardModel> tableCards = deckControlBehavior.GetCardsOnTable();
             List<(ulong, List<CardModel>)> playerHands = playerModels
                 .Select(model => (model.PlayerId, model.CardsInHand))
-                .Where(p => !bettingController.HasPlayerFolded(p.PlayerId))
+                .Where(p => !bettingController.HasPlayerFolded(p.Item1))
                 .ToList();
 
             List<ulong> winners = new List<ulong>();
@@ -154,6 +207,39 @@ public class RoundModel : NetworkBehaviour
                 {
                     bettingController.DistributeWinnings(winner, winnerAmount);
                 });
+            }
+
+            if (IsServer)
+            {
+                var playersToKick = new List<IPlayerController>();
+                foreach (var pm2 in playerModels)
+                {
+                    try
+                    {
+                        int balance = bettingController.GetPlayerBalance(pm2.PlayerId);
+                        if (balance <= 0)
+                        {
+                            playersToKick.Add(pm2);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Failed to check balance for player {pm2.PlayerId}: {ex.Message}");
+                    }
+                }
+
+                foreach (var p in playersToKick)
+                {
+                    try
+                    {
+                        Debug.Log($"Kicking player {p.PlayerId} due to zero balance after round.");
+                        p.Kick();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Failed to kick player {p.PlayerId}: {ex.Message}");
+                    }
+                }
             }
 
             Debug.Log("Round cleanup started");

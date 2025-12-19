@@ -644,4 +644,41 @@ public class BotController : NetworkBehaviour, IPlayerController
             OnYourTurn();
         }
     }
+
+    public void Kick()
+    {
+        Debug.Log($"Kick requested for bot/player {playerId} (IsServer={IsServer})");
+
+        if (IsServer)
+        {
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.DisconnectClient(playerId);
+                Debug.Log($"Bot/Player {playerId} disconnected by server.");
+            }
+            else
+            {
+                Debug.LogWarning("GameManager.Instance is null; cannot disconnect bot/player on server.");
+            }
+            return;
+        }
+
+        RequestKickServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestKickServerRpc(ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer) return;
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.DisconnectClient(playerId);
+            Debug.Log($"Bot/Player {playerId} disconnected by server (via RPC).");
+        }
+        else
+        {
+            Debug.LogWarning("GameManager.Instance is null; cannot disconnect bot/player on server (via RPC).");
+        }
+    }
 }

@@ -1209,4 +1209,43 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             }
         }
     }
+
+    public void Kick()
+    {
+        Debug.Log($"Kick requested for player {PlayerId} (IsServer={IsServer}, IsOwner={IsOwner})");
+
+        if (IsServer)
+        {
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.DisconnectClient(PlayerId);
+                Debug.Log($"Player {PlayerId} disconnected by server.");
+            }
+            else
+            {
+                Debug.LogWarning("GameManager.Instance is null; cannot disconnect player on server.");
+            }
+            return;
+        }
+
+        // If not server, send a request to the server to perform the kick.
+        RequestKickServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestKickServerRpc(ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer) return;
+
+        // On server, use the PlayerId of this instance.
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.DisconnectClient(PlayerId);
+            Debug.Log($"Player {PlayerId} disconnected by server (via RPC).");
+        }
+        else
+        {
+            Debug.LogWarning("GameManager.Instance is null; cannot disconnect player on server (via RPC).");
+        }
+    }
 }
