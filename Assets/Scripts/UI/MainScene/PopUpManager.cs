@@ -15,6 +15,7 @@ public class PopUpManager : MonoBehaviour
 
     public GameObject popupPanel;
     public TMP_InputField inputField;
+    private bool cursorStateBeforePopup;
 
     public bool IsOpen { get; private set; }
 
@@ -113,6 +114,7 @@ public class PopUpManager : MonoBehaviour
         inputField.Select();
         inputField.ActivateInputField();
 
+        cursorStateBeforePopup = Cursor.visible;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
@@ -134,8 +136,11 @@ public class PopUpManager : MonoBehaviour
     {
         popupPanel.SetActive(false);
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        if (!cursorStateBeforePopup)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
 
         IsOpen = false;
 

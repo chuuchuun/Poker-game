@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Networking.Transport.Error;
 
 public class HandEvaluator
 {
@@ -24,7 +25,7 @@ public class HandEvaluator
         public List<CardModel> cards;
     }
 
-    private struct PlayerHandState
+    public struct PlayerHandState
     {
         public HandRank rank;
         public List<CardModel> cards;
@@ -72,7 +73,12 @@ public class HandEvaluator
         return winners.Select(winner => winner.Item1).ToList();
     }
 
-    private PlayerHandState GetPlayerHandState(List<CardModel> cards)
+    public static PlayerHandState GetPlayerHandStateStatic(List<CardModel> cards)
+    {
+        return sharedInstance.GetPlayerHandState(cards);
+    }
+
+    public PlayerHandState GetPlayerHandState(List<CardModel> cards)
     {
         if (cards.Count < 5) return new PlayerHandState(HandRank.None, null);
 
