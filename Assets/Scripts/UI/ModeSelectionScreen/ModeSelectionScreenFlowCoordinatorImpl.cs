@@ -29,7 +29,7 @@ public class ModeSelectionScreenFlowCoordinatorImpl : ModeSelectionScreenFlowCoo
     public void SingleplayerMode()
     {
         SceneManager.sceneLoaded += OnSceneLoaded;
-        SceneManager.LoadScene("MainScene");       
+        SceneManager.LoadScene("MainScene");
     }
 
     public void BackToMainMenu()

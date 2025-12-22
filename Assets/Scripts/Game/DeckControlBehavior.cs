@@ -300,7 +300,8 @@ public class DeckControlBehavior : NetworkBehaviour
                 Transform slot = player.CardSlots[slotIndex];
                 cardObject.transform.SetParent(slot);
                 cardObject.transform.position = slot.position;
-                cardObject.transform.rotation = isFaceDown ? Quaternion.Euler(0, 180f, 0) : Quaternion.identity;
+                var addRotation = isFaceDown ? Quaternion.Euler(0, 180f, 0) : Quaternion.identity;
+                cardObject.transform.rotation = slot.rotation * addRotation;
 
                 if (cardObject.TryGetComponent<NetworkTransform>(out var netTransform))
                 {

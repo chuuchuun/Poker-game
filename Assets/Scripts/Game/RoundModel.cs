@@ -44,7 +44,6 @@ public class RoundModel : NetworkBehaviour
     public void StartRound()
     {
         roundStage = RoundStage.GAME;
-        UpdatePlayers();
         deckControlBehavior.DealCards(playerModels);
 
         bettingController.InitializeBetting(playerModels);
@@ -109,6 +108,44 @@ public class RoundModel : NetworkBehaviour
         }
     }
 
+    public void RemovePlayerById(ulong playerId)
+    {
+        var pm = playerModels.FirstOrDefault(p => p.PlayerId == playerId);
+        if (pm != null)
+        {
+            playerModels.Remove(pm);
+            Debug.Log($"[RoundModel] Removed player {playerId} from RoundModel.playerModels");
+        }
+        else
+        {
+            Debug.LogWarning($"[RoundModel] RemovePlayerById: player {playerId} not found in playerModels");
+        }
+
+
+        try
+        {
+            bettingController?.RemovePlayerById(playerId);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[RoundModel] Error removing player from BettingControlBehavior: {ex.Message}");
+        }
+
+        try
+        {
+            queueControlBehavior?.RemovePlayerById(playerId);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[RoundModel] Error removing player from QueueControlBehavior: {ex.Message}");
+        }
+
+        if (IsServer)
+        {
+            UpdatePlayersState();
+        }
+    }
+
     public void EndRound()
     {
         if (roundStage != RoundStage.GAME) return;
@@ -125,7 +162,7 @@ public class RoundModel : NetworkBehaviour
             List<CardModel> tableCards = deckControlBehavior.GetCardsOnTable();
             List<(ulong, List<CardModel>)> playerHands = playerModels
                 .Select(model => (model.PlayerId, model.CardsInHand))
-                .Where(p => !bettingController.HasPlayerFolded(p.PlayerId))
+                .Where(p => !bettingController.HasPlayerFolded(p.Item1))
                 .ToList();
 
             List<ulong> winners = new List<ulong>();
@@ -156,6 +193,40 @@ public class RoundModel : NetworkBehaviour
                 });
             }
 
+            if (IsServer)
+            {
+                var playersToKick = new List<IPlayerController>();
+                foreach (var pm2 in playerModels)
+                {
+                    try
+                    {
+                        int balance = bettingController.GetPlayerBalance(pm2.PlayerId);
+                        if (balance <= 0)
+                        {
+                            playersToKick.Add(pm2);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Failed to check balance for player {pm2.PlayerId}: {ex.Message}");
+                    }
+                }
+
+                foreach (var p in playersToKick)
+                {
+                    try
+                    {
+                        Debug.Log($"Kicking player {p.PlayerId} due to zero balance after round.");
+                        p.Kick();
+                        RemovePlayerById(p.PlayerId);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Failed to kick/remove player {p.PlayerId}: {ex.Message}");
+                    }
+                }
+            }
+
             Debug.Log("Round cleanup started");
             deckControlBehavior.CollectAllCards();
             roundStage = RoundStage.PREPARATION;
@@ -163,7 +234,6 @@ public class RoundModel : NetworkBehaviour
             StartCoroutine(Delay(2, () =>
             {
                 roundStage = RoundStage.GAME;
-                UpdatePlayers();
                 deckControlBehavior.DealCards(playerModels);
 
                 bettingController.InitializeBetting(playerModels);

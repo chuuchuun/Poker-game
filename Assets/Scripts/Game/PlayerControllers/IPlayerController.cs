@@ -40,4 +40,6 @@ public interface IPlayerController
     List<BetAction> GetAvailableActions();
     void Act(BetAction action, int newBet = 0);
     void NotifyTurn(bool isMyTurn);
+
+    void Kick();
 }

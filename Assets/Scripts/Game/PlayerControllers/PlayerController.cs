@@ -7,6 +7,7 @@ using Unity.Netcode;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 public class PlayerController : NetworkBehaviour, IPlayerController
 {
@@ -43,6 +44,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
     private BalanceCanvasController balanceCanvasController;
 
+    private bool isHidden = false;
 
     [SerializeField] private int currentBalance = 0;
     public int CurrentBalance
@@ -104,6 +106,15 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         Debug.Log($"Player {OwnerClientId} spawned - IsServer: {IsServer}, IsHost: {IsHost}, IsOwner: {IsOwner}");
 
         networkBalance.OnValueChanged += OnNetworkBalanceChanged;
+        isMyTurn.OnValueChanged += OnIsMyTurnChanged;
+
+        if (PlayerId == NetworkManager.Singleton.LocalClientId)
+        {
+            if (isMyTurn.Value)
+                GetAvailableActions();
+            else
+                ResetActionText();
+        }
 
         if (!IsOwner)
         {
@@ -130,8 +141,29 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             currentBalance = newValue;
             OnBalanceChanged?.Invoke(newValue);
         }
-        chipsText.text = $"Balance: {currentBalance}";
 
+        if (PlayerId == NetworkManager.Singleton.LocalClientId)
+        {
+            chipsText.text = $"Balance: {currentBalance}";
+        }
+
+    }
+
+    private void OnIsMyTurnChanged(bool oldValue, bool newValue)
+    {
+        Debug.Log($"PlayerController.OnIsMyTurnChanged: Player {PlayerId} {oldValue} -> {newValue} (LocalClient={NetworkManager.Singleton.LocalClientId})");
+
+        if (PlayerId == NetworkManager.Singleton.LocalClientId)
+        {
+            if (newValue)
+            {
+                GetAvailableActions();
+            }
+            else
+            {
+                ResetActionText();
+            }
+        }
     }
 
     private void FindMyChips()
@@ -157,7 +189,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
                 }
             }
         }
-        chipsText.text = $"Balance: {currentBalance}";
 
         Debug.Log($"[CLIENT {NetworkManager.Singleton.LocalClientId}] Chips found: {totalChips.Count}");
     }
@@ -258,21 +289,22 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         if (!isMyTurn.Value) return new List<BetAction>();
         List<BetAction> availableActions = new List<BetAction>
         {
-            BetAction.check,
             BetAction.fold,
-            BetAction.call
         };
 
-        if (currentBalance > currentBet)
+        var requiredToCall = roundModel.GetCurrentHighestBet() - CurrentBet;
+
+        if (requiredToCall > 0)
         {
-            availableActions.Add(BetAction.raise);
             availableActions.Add(BetAction.reRaise);
+            availableActions.Add(BetAction.call);
         }
         else
         {
-            availableActions.Remove(BetAction.raise);
-            availableActions.Remove(BetAction.reRaise);
+            availableActions.Add(BetAction.check);
+            availableActions.Add(BetAction.raise);
         }
+
         foreach (BetAction action in availableActions)
         {
             switch (action)
@@ -552,7 +584,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         int value;
         GameObject prefab;
 
-        // fixed chip values for colors (green = 5, blue = 1)
         (value, prefab) = color switch {
             ChipColor.black => (25, chipPrefabBlack),
             ChipColor.red => (10, chipPrefabRed),
@@ -575,47 +606,165 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         }
         else
         {
-            // fallback to destroy if not a networked object
             Destroy(chip.gameObject);
         }
     }
 
     public List<ChipModel> RemoveChip(int bet)
     {
-        List<ChipModel> chipsToRemove = new List<ChipModel>();
-        int[] chipValues = new int[] { 25, 10, 5, 1 };
-        int[] requiredChips = RequiredChips(bet);
-        UpdateChipsToMeetRequirements(requiredChips.ToList());
+        if (bet <= 0) return new List<ChipModel>();
 
-        foreach (int chipValue in requiredChips)
+        int originalBalance = currentBalance;
+
+        if (bet >= originalBalance)
         {
-            ChipModel chip = GetChipByValue(chipValue);
-            if (chip != null)
+            var allChips = totalChips.ToList();
+            if (allChips.Count > 0)
             {
-                chipsToRemove.Add(chip);
-                switch (chip.color)
+                var chipIds = allChips.Select(c => (ulong)c.chipId).ToArray();
+                MoveChipsToBankServerRpc(chipIds);
+
+                blackChips.Clear();
+                redChips.Clear();
+                greenChips.Clear();
+                blueChips.Clear();
+                totalChips.Clear();
+
+                currentBalance = 0;
+                if (IsServer)
                 {
-                    case ChipColor.black: blackChips.Remove(chip); break;
-                    case ChipColor.red: redChips.Remove(chip); break;
-                    case ChipColor.green: greenChips.Remove(chip); break;
-                    case ChipColor.blue: blueChips.Remove(chip); break;
+                    networkBalance.Value = currentBalance;
+                    UpdateBalanceClientRpc(currentBalance);
                 }
             }
-            else
+            return allChips.Count > 0 ? allChips : null;
+        }
+
+        List<ChipModel> chipsToRemove = new List<ChipModel>();
+        int[] chipValues = new int[] { 25, 10, 5, 1 };
+        int remaining = bet;
+
+        foreach (int chipValue in chipValues)
+        {
+            while (remaining >= chipValue)
             {
+                ChipModel chip = GetChipByValue(chipValue);
+                if (chip != null)
+                {
+                    chipsToRemove.Add(chip);
+                    switch (chip.color)
+                    {
+                        case ChipColor.black: blackChips.Remove(chip); break;
+                        case ChipColor.red: redChips.Remove(chip); break;
+                        case ChipColor.green: greenChips.Remove(chip); break;
+                        case ChipColor.blue: blueChips.Remove(chip); break;
+                    }
+
+                    remaining -= chipValue;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        if (remaining == 0 && chipsToRemove.Count > 0)
+        {
+            var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
+            MoveChipsToBankServerRpc(chipIds);
+            return chipsToRemove;
+        }
+
+        int chipValueToBreak = 0;
+        foreach (var value in chipValues.Reverse())
+        {
+            if (remaining < value)
+            {
+                chipValueToBreak = value;
                 break;
             }
         }
 
-        if (chipsToRemove.Count > 0)
+        RemoveChipInstance(GetColorForValue(chipValueToBreak));
+
+        var bankSpawn = remaining;
+        var playerSpawn = chipValueToBreak - remaining;
+
+        List<ChipColor> chipsToSpawn = new List<ChipColor>();
+        List<ChipColor> chipsToReturn = new List<ChipColor>();
+        foreach (int chipValue in chipValues)
         {
-            var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
-            MoveChipsToBankServerRpc(chipIds);
-            
-            return chipsToRemove;
+            while (bankSpawn >= chipValue)
+            {
+                chipsToSpawn.Add(GetColorForValue(chipValue));
+                bankSpawn -= chipValue;
+            }
+
+            while (playerSpawn >= chipValue)
+            {
+                chipsToSpawn.Add(GetColorForValue(chipValue));
+                chipsToReturn.Add(GetColorForValue(chipValue));
+                playerSpawn -= chipValue;
+            }
         }
-        return null;
+
+        SpawnChips(chipsToSpawn);
+
+        Debug.LogWarning($"Returning chips to bank to complete removal of {bet}");
+
+        foreach (var chipColor in chipsToReturn)
+        {
+            var chip = GetChipByValue(GetValueByColor(chipColor));
+            totalChips.Remove(chip);
+            switch (chip.color)
+            {
+                case ChipColor.black: blackChips.Remove(chip); break;
+                case ChipColor.red: redChips.Remove(chip); break;
+                case ChipColor.green: greenChips.Remove(chip); break;
+                case ChipColor.blue: blueChips.Remove(chip); break;
+            }
+            chipsToRemove.Add(chip);
+        }
+
+        MoveChipsToBankServerRpc(chipsToRemove.Select(c => (ulong)c.chipId).ToArray());
+
+        return chipsToRemove;
     }
+
+    void SpawnChips(List<ChipColor> chips)
+    {
+        foreach (var chipGroup in chips.GroupBy(c => c))
+        {
+            var color = chipGroup.ToList()[0];
+            SpawnChips(
+                chipGroup.ToList()[0],
+                GetValueByColor(color),
+                chipGroup.Count(), 
+                GetPrefabForValue(
+                    GetValueByColor(color)
+                )
+            );
+        }
+    }
+
+    int GetValueByColor(ChipColor color)
+    {
+        switch (color)
+        {
+            case ChipColor.black:
+                return 25;
+            case ChipColor.red:
+                return 10;
+            case ChipColor.green:
+                return 5;
+            case ChipColor.blue:
+                return 1;
+        }
+
+        return 0;
+    }
+
     ChipModel DropChip(ChipColor color)
     {
         switch (color)
@@ -711,7 +860,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
             MoveChipToBank(chip, targetParent, stackPosition);
 
-            // pass color index instead of instance id to clients to avoid instance id mismatch across processes
             UpdateChipPositionClientRpc(chip.chipId, (int)chip.color, stackPosition);
         }
     }
@@ -788,6 +936,35 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             Debug.Log($"Client {OwnerClientId} received balance update: {newBalance}");
             currentBalance = newBalance;
             OnBalanceChanged?.Invoke(newBalance);
+        }
+    }
+
+    [ClientRpc]
+    public void UpdateTurnClientRpc(ulong targetPlayerId, bool myTurn)
+    {
+        PlayerController pc = null;
+        if (NetworkManager.Singleton != null)
+        {
+            var netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(targetPlayerId);
+            if (netObj != null)
+                pc = netObj.GetComponent<PlayerController>();
+        }
+
+        if (pc == null)
+            pc = FindObjectsOfType<PlayerController>().FirstOrDefault(p => p.PlayerId == targetPlayerId);
+
+        if (pc == null)
+        {
+            Debug.LogWarning($"UpdateTurnClientRpc: player {targetPlayerId} not found on client.");
+            return;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClientId == targetPlayerId)
+        {
+            if (myTurn)
+                pc.GetAvailableActions();
+            else
+                pc.ResetActionText();
         }
     }
 
@@ -1114,8 +1291,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
     private void Update()
     {
-        GetAvailableActions();
-
         if (Input.GetKeyDown(KeyCode.C) && IsOwner)
         {
             DebugChipState();
@@ -1186,18 +1361,120 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         {
             isMyTurn.Value = myTurn;
         }
+    }
 
-        if (IsOwner)
+    public void SetModelVisibility(bool visible)
+    {
+        if (isHidden == !visible) return;
+
+        var renderers = GetComponentsInChildren<Renderer>(true);
+        foreach (var r in renderers)
         {
-            if (myTurn)
+            if (r.GetComponent<Camera>() != null) continue;
+            r.enabled = visible;
+        }
+
+        var canvases = GetComponentsInChildren<Canvas>(true);
+        foreach (var c in canvases)
+        {
+            c.enabled = visible;
+        }
+
+        var texts = GetComponentsInChildren<TMP_Text>(true);
+        foreach (var t in texts)
+        {
+            t.enabled = visible;
+        }
+
+        var colliders = GetComponentsInChildren<Collider>(true);
+        foreach (var col in colliders)
+        {
+            col.enabled = visible;
+        }
+
+        if (IsOwner && input != null)
+        {
+            input.enabled = visible;
+        }
+
+        isHidden = !visible;
+    }
+
+    public void Kick()
+    {
+        Debug.Log($"Kick requested for player {PlayerId} (IsServer={IsServer}, IsOwner={IsOwner})");
+
+        if (IsServer)
+        {
+            try
             {
-                Debug.Log($"[PlayerController] It's your turn ({OwnerClientId})");
-                GetAvailableActions();
+                var round = GameManager.Instance?.GetComponent<RoundModel>();
+                if (round != null)
+                {
+                    round.RemovePlayerById(PlayerId);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                ResetActionText();
+                Debug.LogWarning($"Failed to remove player references before hide: {ex.Message}");
+            }
+
+            HidePlayerClientRpc(PlayerId);
+
+            Debug.Log($"Player {PlayerId} hidden by server (no disconnect).");
+            return;
+        }
+
+        RequestHidePlayerServerRpc();
+        SetModelVisibility(false);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestHidePlayerServerRpc(ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer) return;
+
+        ulong senderId = rpcParams.Receive.SenderClientId;
+
+        try
+        {
+            var round = GameManager.Instance?.GetComponent<RoundModel>();
+            if (round != null)
+            {
+                round.RemovePlayerById(senderId);
             }
         }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Failed to remove player references before hide (server RPC): {ex.Message}");
+        }
+
+        HidePlayerClientRpc(senderId);
+
+        Debug.Log($"Server received hide request and hid player {senderId} (no disconnect).");
+    }
+
+    [ClientRpc]
+    private void HidePlayerClientRpc(ulong targetPlayerId)
+    {
+        NetworkObject netObj = null;
+        if (NetworkManager.Singleton != null)
+        {
+            netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(targetPlayerId);
+        }
+
+        PlayerController pc = null;
+        if (netObj != null)
+            pc = netObj.GetComponent<PlayerController>();
+        else
+            pc = FindObjectsOfType<PlayerController>().FirstOrDefault(p => p.PlayerId == targetPlayerId);
+
+        if (pc == null)
+        {
+            Debug.LogWarning($"HidePlayerClientRpc: player {targetPlayerId} not found on client.");
+            return;
+        }
+
+        pc.SetModelVisibility(false);
     }
 }
