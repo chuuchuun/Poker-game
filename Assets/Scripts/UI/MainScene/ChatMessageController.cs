@@ -195,7 +195,7 @@ public class ChatMessageController : NetworkBehaviour
             color = parsedColor;
         }
 
-        AddMessage(FormatWithTimestamp($"[System] {message}"), color);
+        AddMessage(FormatWithTimestamp($"{message}"), color);
     }
 
     #endregion

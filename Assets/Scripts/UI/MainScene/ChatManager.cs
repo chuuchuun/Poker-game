@@ -335,7 +335,7 @@ public class ChatManager : NetworkBehaviour
             color = parsedColor;
         }
 
-        AddMessage(FormatWithTimestamp($"[System] {message}"), color);
+        AddMessage(FormatWithTimestamp($"{message}"), color);
     }
 
     private string FormatPlayerActionMessage(ulong playerId, BetAction action, int amount)
