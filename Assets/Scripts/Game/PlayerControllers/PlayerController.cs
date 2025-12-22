@@ -290,20 +290,11 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         List<BetAction> availableActions = new List<BetAction>
         {
             BetAction.fold,
+            BetAction.call,
+            BetAction.raise,
+            BetAction.reRaise,
+            BetAction.check
         };
-
-        var requiredToCall = roundModel.GetCurrentHighestBet() - CurrentBet;
-
-        if (requiredToCall > 0)
-        {
-            availableActions.Add(BetAction.reRaise);
-            availableActions.Add(BetAction.call);
-        }
-        else
-        {
-            availableActions.Add(BetAction.check);
-            availableActions.Add(BetAction.raise);
-        }
 
         foreach (BetAction action in availableActions)
         {
