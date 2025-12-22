@@ -33,7 +33,8 @@ public class PopUpManager : MonoBehaviour
         }
         else
         {
-            Destroy(gameObject);
+            Destroy(Instance);
+            Instance = this;
         }
     }
 
