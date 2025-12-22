@@ -9,7 +9,6 @@ public class BotController : NetworkBehaviour, IPlayerController
 {
     public ulong PlayerId => playeridBacking;
     private ulong playeridBacking;
-
     public ulong playerId
     {
         get => playeridBacking;
@@ -360,12 +359,41 @@ public class BotController : NetworkBehaviour, IPlayerController
 
     public List<ChipModel> RemoveChip(int bet)
     {
+        if (bet <= 0) return new List<ChipModel>();
+
+        int originalBalance = currentBalance;
+
+        if (bet >= originalBalance)
+        {
+            var allChips = totalChips.ToList();
+            if (allChips.Count > 0)
+            {
+                var chipIds = allChips.Select(c => (ulong)c.chipId).ToArray();
+                MoveChipsToBankServerRpc(chipIds);
+
+                blackChips.Clear();
+                redChips.Clear();
+                greenChips.Clear();
+                blueChips.Clear();
+                totalChips.Clear();
+
+                currentBalance = 0;
+                if (IsServer)
+                {
+                    networkBalance.Value = currentBalance;
+                    UpdateBalanceClientRpc(currentBalance);
+                }
+            }
+            return allChips.Count > 0 ? allChips : null;
+        }
+
         List<ChipModel> chipsToRemove = new List<ChipModel>();
         int[] chipValues = new int[] { 25, 10, 5, 1 };
+        int remaining = bet;
 
         foreach (int chipValue in chipValues)
         {
-            while (bet > 0)
+            while (remaining >= chipValue)
             {
                 ChipModel chip = GetChipByValue(chipValue);
                 if (chip != null)
@@ -378,7 +406,8 @@ public class BotController : NetworkBehaviour, IPlayerController
                         case ChipColor.green: greenChips.Remove(chip); break;
                         case ChipColor.blue: blueChips.Remove(chip); break;
                     }
-                    bet -= chipValue;
+
+                    remaining -= chipValue;
                 }
                 else
                 {
@@ -387,14 +416,101 @@ public class BotController : NetworkBehaviour, IPlayerController
             }
         }
 
-        if (chipsToRemove.Count > 0)
+        if (remaining == 0 && chipsToRemove.Count > 0)
         {
             var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
             MoveChipsToBankServerRpc(chipIds);
-
             return chipsToRemove;
         }
-        return null;
+
+        int chipValueToBreak = 0;
+        foreach (var value in chipValues.Reverse())
+        {
+            if (remaining < value)
+            {
+                chipValueToBreak = value;
+                break;
+            }
+        }
+
+        RemoveChipInstance(GetColorForValue(chipValueToBreak));
+
+        var bankSpawn = remaining;
+        var playerSpawn = chipValueToBreak - remaining;
+
+        List<ChipColor> chipsToSpawn = new List<ChipColor>();
+        List<ChipColor> chipsToReturn = new List<ChipColor>();
+        foreach (int chipValue in chipValues)
+        {
+            while (bankSpawn >= chipValue)
+            {
+                chipsToSpawn.Add(GetColorForValue(chipValue));
+                bankSpawn -= chipValue;
+            }
+
+            while (playerSpawn >= chipValue)
+            {
+                chipsToSpawn.Add(GetColorForValue(chipValue));
+                chipsToReturn.Add(GetColorForValue(chipValue));
+                playerSpawn -= chipValue;
+            }
+        }
+
+        SpawnChips(chipsToSpawn);
+
+        Debug.LogWarning($"Returning chips to bank to complete removal of {bet}");
+
+        foreach (var chipColor in chipsToReturn)
+        {
+            var chip = GetChipByValue(GetValueByColor(chipColor));
+            totalChips.Remove(chip);
+            switch (chip.color)
+            {
+                case ChipColor.black: blackChips.Remove(chip); break;
+                case ChipColor.red: redChips.Remove(chip); break;
+                case ChipColor.green: greenChips.Remove(chip); break;
+                case ChipColor.blue: blueChips.Remove(chip); break;
+            }
+            chipsToRemove.Add(chip);
+        }
+
+        MoveChipsToBankServerRpc(chipsToRemove.Select(c => (ulong)c.chipId).ToArray());
+
+        return chipsToRemove;
+    }
+    // --- End copied logic ---
+
+    void SpawnChips(List<ChipColor> chips)
+    {
+        foreach (var chipGroup in chips.GroupBy(c => c))
+        {
+            var color = chipGroup.ToList()[0];
+            SpawnChips(
+                chipGroup.ToList()[0],
+                GetValueByColor(color),
+                chipGroup.Count(), 
+                GetPrefabForValue(
+                    GetValueByColor(color)
+                )
+            );
+        }
+    }
+
+    int GetValueByColor(ChipColor color)
+    {
+        switch (color)
+        {
+            case ChipColor.black:
+                return 25;
+            case ChipColor.red:
+                return 10;
+            case ChipColor.green:
+                return 5;
+            case ChipColor.blue:
+                return 1;
+        }
+
+        return 0;
     }
 
     private ChipModel GetChipByValue(int value)
@@ -409,6 +525,63 @@ public class BotController : NetworkBehaviour, IPlayerController
                 return greenChips.FirstOrDefault();
             case 1:
                 return blueChips.FirstOrDefault();
+            default:
+                return null;
+        }
+    }
+
+    private void RemoveChipInstance(ChipColor color)
+    {
+        var chip = DropChip(color);
+        if (chip == null) return;
+
+        var netObj = chip.GetComponent<NetworkObject>();
+        if (netObj != null && netObj.IsSpawned)
+        {
+            netObj.Despawn(true);
+        }
+        else
+        {
+            Destroy(chip.gameObject);
+        }
+    }
+
+    ChipModel DropChip(ChipColor color)
+    {
+        switch (color)
+        {
+            case ChipColor.black:
+                var blackChip = blackChips.FirstOrDefault();
+                if (blackChip != null)
+                {
+                    blackChips.Remove(blackChip);
+                    totalChips.Remove(blackChip);
+                }
+                return blackChip;
+            case ChipColor.red:
+                var redChip = redChips.FirstOrDefault();
+                if (redChip != null)
+                {
+                    redChips.Remove(redChip);
+                    totalChips.Remove(redChip);
+                }
+                return redChip;
+            case ChipColor.green:
+                var greenChip = greenChips.FirstOrDefault();
+                if (greenChip != null)
+                {
+                    greenChips.Remove(greenChip);
+                    totalChips.Remove(greenChip);
+                }
+                return greenChip;
+            case ChipColor.blue:
+                var blueChip = blueChips.FirstOrDefault();
+                if (blueChip != null)
+                {
+                    blueChips.Remove(blueChip);
+                    totalChips.Remove(blueChip);
+                }
+                return blueChip;
             default:
                 return null;
         }

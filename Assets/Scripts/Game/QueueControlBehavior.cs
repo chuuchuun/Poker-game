@@ -14,7 +14,7 @@ class QueuePlayerState
 public class QueueControlBehavior : NetworkBehaviour
 {
     private IPlayerController firstPlayer;
-    private IPlayerController waitingForTurnPlayer;
+    public IPlayerController waitingForTurnPlayer;
     private bool passedFirstPlayer = false;
     List<QueuePlayerState> queuedPlayers = new List<QueuePlayerState>();
 

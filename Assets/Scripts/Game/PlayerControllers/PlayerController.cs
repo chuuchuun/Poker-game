@@ -584,7 +584,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         int value;
         GameObject prefab;
 
-        // fixed chip values for colors (green = 5, blue = 1)
         (value, prefab) = color switch {
             ChipColor.black => (25, chipPrefabBlack),
             ChipColor.red => (10, chipPrefabRed),
@@ -613,40 +612,159 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
     public List<ChipModel> RemoveChip(int bet)
     {
-        List<ChipModel> chipsToRemove = new List<ChipModel>();
-        int[] chipValues = new int[] { 25, 10, 5, 1 };
-        int[] requiredChips = RequiredChips(bet);
-        UpdateChipsToMeetRequirements(requiredChips.ToList());
+        if (bet <= 0) return new List<ChipModel>();
 
-        foreach (int chipValue in requiredChips)
+        int originalBalance = currentBalance;
+
+        if (bet >= originalBalance)
         {
-            ChipModel chip = GetChipByValue(chipValue);
-            if (chip != null)
+            var allChips = totalChips.ToList();
+            if (allChips.Count > 0)
             {
-                chipsToRemove.Add(chip);
-                switch (chip.color)
+                var chipIds = allChips.Select(c => (ulong)c.chipId).ToArray();
+                MoveChipsToBankServerRpc(chipIds);
+
+                blackChips.Clear();
+                redChips.Clear();
+                greenChips.Clear();
+                blueChips.Clear();
+                totalChips.Clear();
+
+                currentBalance = 0;
+                if (IsServer)
                 {
-                    case ChipColor.black: blackChips.Remove(chip); break;
-                    case ChipColor.red: redChips.Remove(chip); break;
-                    case ChipColor.green: greenChips.Remove(chip); break;
-                    case ChipColor.blue: blueChips.Remove(chip); break;
+                    networkBalance.Value = currentBalance;
+                    UpdateBalanceClientRpc(currentBalance);
                 }
             }
-            else
+            return allChips.Count > 0 ? allChips : null;
+        }
+
+        List<ChipModel> chipsToRemove = new List<ChipModel>();
+        int[] chipValues = new int[] { 25, 10, 5, 1 };
+        int remaining = bet;
+
+        foreach (int chipValue in chipValues)
+        {
+            while (remaining >= chipValue)
             {
+                ChipModel chip = GetChipByValue(chipValue);
+                if (chip != null)
+                {
+                    chipsToRemove.Add(chip);
+                    switch (chip.color)
+                    {
+                        case ChipColor.black: blackChips.Remove(chip); break;
+                        case ChipColor.red: redChips.Remove(chip); break;
+                        case ChipColor.green: greenChips.Remove(chip); break;
+                        case ChipColor.blue: blueChips.Remove(chip); break;
+                    }
+
+                    remaining -= chipValue;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        if (remaining == 0 && chipsToRemove.Count > 0)
+        {
+            var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
+            MoveChipsToBankServerRpc(chipIds);
+            return chipsToRemove;
+        }
+
+        int chipValueToBreak = 0;
+        foreach (var value in chipValues.Reverse())
+        {
+            if (remaining < value)
+            {
+                chipValueToBreak = value;
                 break;
             }
         }
 
-        if (chipsToRemove.Count > 0)
+        RemoveChipInstance(GetColorForValue(chipValueToBreak));
+
+        var bankSpawn = remaining;
+        var playerSpawn = chipValueToBreak - remaining;
+
+        List<ChipColor> chipsToSpawn = new List<ChipColor>();
+        List<ChipColor> chipsToReturn = new List<ChipColor>();
+        foreach (int chipValue in chipValues)
         {
-            var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
-            MoveChipsToBankServerRpc(chipIds);
-            
-            return chipsToRemove;
+            while (bankSpawn >= chipValue)
+            {
+                chipsToSpawn.Add(GetColorForValue(chipValue));
+                bankSpawn -= chipValue;
+            }
+
+            while (playerSpawn >= chipValue)
+            {
+                chipsToSpawn.Add(GetColorForValue(chipValue));
+                chipsToReturn.Add(GetColorForValue(chipValue));
+                playerSpawn -= chipValue;
+            }
         }
-        return null;
+
+        SpawnChips(chipsToSpawn);
+
+        Debug.LogWarning($"Returning chips to bank to complete removal of {bet}");
+
+        foreach (var chipColor in chipsToReturn)
+        {
+            var chip = GetChipByValue(GetValueByColor(chipColor));
+            totalChips.Remove(chip);
+            switch (chip.color)
+            {
+                case ChipColor.black: blackChips.Remove(chip); break;
+                case ChipColor.red: redChips.Remove(chip); break;
+                case ChipColor.green: greenChips.Remove(chip); break;
+                case ChipColor.blue: blueChips.Remove(chip); break;
+            }
+            chipsToRemove.Add(chip);
+        }
+
+        MoveChipsToBankServerRpc(chipsToRemove.Select(c => (ulong)c.chipId).ToArray());
+
+        return chipsToRemove;
     }
+
+    void SpawnChips(List<ChipColor> chips)
+    {
+        foreach (var chipGroup in chips.GroupBy(c => c))
+        {
+            var color = chipGroup.ToList()[0];
+            SpawnChips(
+                chipGroup.ToList()[0],
+                GetValueByColor(color),
+                chipGroup.Count(), 
+                GetPrefabForValue(
+                    GetValueByColor(color)
+                )
+            );
+        }
+    }
+
+    int GetValueByColor(ChipColor color)
+    {
+        switch (color)
+        {
+            case ChipColor.black:
+                return 25;
+            case ChipColor.red:
+                return 10;
+            case ChipColor.green:
+                return 5;
+            case ChipColor.blue:
+                return 1;
+        }
+
+        return 0;
+    }
+
     ChipModel DropChip(ChipColor color)
     {
         switch (color)
