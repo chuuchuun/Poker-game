@@ -106,6 +106,15 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         Debug.Log($"Player {OwnerClientId} spawned - IsServer: {IsServer}, IsHost: {IsHost}, IsOwner: {IsOwner}");
 
         networkBalance.OnValueChanged += OnNetworkBalanceChanged;
+        isMyTurn.OnValueChanged += OnIsMyTurnChanged;
+
+        if (PlayerId == NetworkManager.Singleton.LocalClientId)
+        {
+            if (isMyTurn.Value)
+                GetAvailableActions();
+            else
+                ResetActionText();
+        }
 
         if (!IsOwner)
         {
@@ -132,8 +141,29 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             currentBalance = newValue;
             OnBalanceChanged?.Invoke(newValue);
         }
-        chipsText.text = $"Balance: {currentBalance}";
 
+        if (PlayerId == NetworkManager.Singleton.LocalClientId)
+        {
+            chipsText.text = $"Balance: {currentBalance}";
+        }
+
+    }
+
+    private void OnIsMyTurnChanged(bool oldValue, bool newValue)
+    {
+        Debug.Log($"PlayerController.OnIsMyTurnChanged: Player {PlayerId} {oldValue} -> {newValue} (LocalClient={NetworkManager.Singleton.LocalClientId})");
+
+        if (PlayerId == NetworkManager.Singleton.LocalClientId)
+        {
+            if (newValue)
+            {
+                GetAvailableActions();
+            }
+            else
+            {
+                ResetActionText();
+            }
+        }
     }
 
     private void FindMyChips()
@@ -159,7 +189,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
                 }
             }
         }
-        chipsText.text = $"Balance: {currentBalance}";
 
         Debug.Log($"[CLIENT {NetworkManager.Singleton.LocalClientId}] Chips found: {totalChips.Count}");
     }
@@ -260,21 +289,22 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         if (!isMyTurn.Value) return new List<BetAction>();
         List<BetAction> availableActions = new List<BetAction>
         {
-            BetAction.check,
             BetAction.fold,
-            BetAction.call
         };
 
-        if (currentBalance > currentBet)
+        var requiredToCall = roundModel.GetCurrentHighestBet() - CurrentBet;
+
+        if (requiredToCall > 0)
         {
-            availableActions.Add(BetAction.raise);
             availableActions.Add(BetAction.reRaise);
+            availableActions.Add(BetAction.call);
         }
         else
         {
-            availableActions.Remove(BetAction.raise);
-            availableActions.Remove(BetAction.reRaise);
+            availableActions.Add(BetAction.check);
+            availableActions.Add(BetAction.raise);
         }
+
         foreach (BetAction action in availableActions)
         {
             switch (action)
@@ -791,6 +821,35 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         }
     }
 
+    [ClientRpc]
+    public void UpdateTurnClientRpc(ulong targetPlayerId, bool myTurn)
+    {
+        PlayerController pc = null;
+        if (NetworkManager.Singleton != null)
+        {
+            var netObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(targetPlayerId);
+            if (netObj != null)
+                pc = netObj.GetComponent<PlayerController>();
+        }
+
+        if (pc == null)
+            pc = FindObjectsOfType<PlayerController>().FirstOrDefault(p => p.PlayerId == targetPlayerId);
+
+        if (pc == null)
+        {
+            Debug.LogWarning($"UpdateTurnClientRpc: player {targetPlayerId} not found on client.");
+            return;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClientId == targetPlayerId)
+        {
+            if (myTurn)
+                pc.GetAvailableActions();
+            else
+                pc.ResetActionText();
+        }
+    }
+
    
     private void ClearBank()
     {
@@ -1114,8 +1173,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
 
     private void Update()
     {
-        GetAvailableActions();
-
         if (Input.GetKeyDown(KeyCode.C) && IsOwner)
         {
             DebugChipState();
@@ -1185,19 +1242,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         if (IsServer)
         {
             isMyTurn.Value = myTurn;
-        }
-
-        if (IsOwner)
-        {
-            if (myTurn)
-            {
-                Debug.Log($"[PlayerController] It's your turn ({OwnerClientId})");
-                GetAvailableActions();
-            }
-            else
-            {
-                ResetActionText();
-            }
         }
     }
 
