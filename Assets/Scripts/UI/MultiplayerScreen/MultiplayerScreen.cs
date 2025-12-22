@@ -31,9 +31,10 @@ public class MultiplayerScreen : MonoBehaviour
 
         transform.Find("CreateLobbyButton").GetComponent<Button>().onClick.AddListener(() =>
         {
-            FlowCoordinator.CreateGame("Test");
+            ShowCreateLobbyPopup();
         });
     }
+
     public void RefreshLobbyList()
     {
          ClearLobbyList();
@@ -64,9 +65,35 @@ public class MultiplayerScreen : MonoBehaviour
         }
     }
 
+    private void ShowCreateLobbyPopup()
+    {
+        if (PopUpManager.Instance == null)
+        {
+            Debug.LogWarning("PopUpManager instance not found. Falling back to default lobby name.");
+            FlowCoordinator.CreateGame("Test");
+            return;
+        }
+
+        PopUpManager.OnTextSubmitted += OnLobbyNameSubmitted;
+        PopUpManager.Instance.OpenPopup(PopupMode.Text, "Enter lobby name", "", "Start Game");
+    }
+
+    private void OnLobbyNameSubmitted(string lobbyName)
+    {
+        PopUpManager.OnTextSubmitted -= OnLobbyNameSubmitted;
+
+        if (string.IsNullOrWhiteSpace(lobbyName))
+        {
+            Debug.LogWarning("Lobby name was empty, using fallback name 'Test'");
+            lobbyName = "Test";
+        }
+
+        FlowCoordinator.CreateGame(lobbyName);
+    }
+
     public void CreateGame()
     {
-        FlowCoordinator.CreateGame("Test");
+        ShowCreateLobbyPopup();
     }
 
     private void JoinGame(string lobbyId)

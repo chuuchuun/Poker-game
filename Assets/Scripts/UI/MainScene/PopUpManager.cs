@@ -3,6 +3,12 @@ using TMPro;
 using System;
 using UnityEngine.InputSystem;
 
+public enum PopupMode
+{
+    BetAmount,
+    Text
+}
+
 public class PopUpManager : MonoBehaviour
 {
     public static PopUpManager Instance { get; private set; }
@@ -14,6 +20,9 @@ public class PopUpManager : MonoBehaviour
 
     public static event Action<bool> OnPopupStateChanged;
     public static event Action<int> OnBetAmountSubmitted;
+    public static event Action<string> OnTextSubmitted;
+
+    private PopupMode currentMode = PopupMode.BetAmount;
 
     void Awake()
     {
@@ -38,27 +47,69 @@ public class PopUpManager : MonoBehaviour
     private void OnInputSubmit(string input)
     {
         Debug.Log($"Input submitted: {input}");
-        if (int.TryParse(input, out int betAmount) && betAmount > 0)
+
+        if (currentMode == PopupMode.BetAmount)
         {
-            Debug.Log($"Bet amount submitted: {betAmount}");
-            OnBetAmountSubmitted?.Invoke(betAmount);
-            ClosePopup();
+            if (int.TryParse(input, out int betAmount) && betAmount > 0)
+            {
+                Debug.Log($"Bet amount submitted: {betAmount}");
+                OnBetAmountSubmitted?.Invoke(betAmount);
+                ClosePopup();
+            }
+            else
+            {
+                Debug.LogWarning($"Invalid input for bet amount: {input}");
+                inputField.text = "";
+                inputField.Select();
+                inputField.ActivateInputField();
+            }
         }
         else
         {
-            Debug.LogWarning($"Invalid input: {input}");
-            inputField.text = "";
-            inputField.Select();
-            inputField.ActivateInputField();
+            if (!string.IsNullOrWhiteSpace(input))
+            {
+                Debug.Log($"Text submitted: {input}");
+                OnTextSubmitted?.Invoke(input);
+                ClosePopup();
+            }
+            else
+            {
+                Debug.LogWarning("Invalid input for text popup (empty).");
+                inputField.text = "";
+                inputField.Select();
+                inputField.ActivateInputField();
+            }
         }
     }
 
     public void OpenPopup()
     {
+        OpenPopup(PopupMode.BetAmount);
+    }
+
+    public void OpenPopup(PopupMode mode, string placeholder = "", string defaultText = "", string buttonText = "Bet")
+    {
         Debug.Log("Opening popup");
+        currentMode = mode;
+
         popupPanel.SetActive(true);
 
-        inputField.text = "";
+        var buttonTitle = popupPanel.transform.Find("SubmitButton").GetComponentInChildren<TMP_Text>();
+        buttonTitle.text = buttonText;
+
+        if (!string.IsNullOrEmpty(defaultText))
+            inputField.text = defaultText;
+        else
+            inputField.text = "";
+
+        if (!string.IsNullOrEmpty(placeholder) && inputField.placeholder != null)
+        {
+            if (inputField.placeholder is TMP_Text tmpPlaceholder)
+            {
+                tmpPlaceholder.text = placeholder;
+            }
+        }
+
         inputField.Select();
         inputField.ActivateInputField();
 
@@ -79,7 +130,6 @@ public class PopUpManager : MonoBehaviour
         }
     }
 
-   
     public void ClosePopup()
     {
         popupPanel.SetActive(false);
