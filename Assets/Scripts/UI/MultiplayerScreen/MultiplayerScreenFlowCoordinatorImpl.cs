@@ -18,6 +18,7 @@ public class MultiplayerScreenFlowCoordinatorImpl : MultiplayerScreenFlowCoordin
             return;
         }
 
+        GameManager.Instance.IsSingleplayer = false;
         if (scene.name == "MainScene")
         {
             if (isCreatingGame)

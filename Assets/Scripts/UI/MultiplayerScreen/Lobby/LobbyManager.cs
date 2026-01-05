@@ -26,21 +26,27 @@ public class LANLobbyManager
     private Thread broadcastThread;
     private bool isBroadcasting = false;
 
-    // Store the actual server IP for joining
     private string serverIPAddress;
 
     private LANLobbyManager() { }
 
-    public void StartHostLAN()
+    public void PrepareHostTransport()
     {
-        // Configure Unity Transport for host
         var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
         transport.SetConnectionData("0.0.0.0", (ushort)GamePort);
 
-        // Get the local IP address for broadcasting
         serverIPAddress = GetLocalIPAddress();
+    }
 
-        NetworkManager.Singleton.StartHost();
+    public void StartHostLAN()
+    {
+        PrepareHostTransport();
+
+        if (!NetworkManager.Singleton.IsHost)
+        {
+            NetworkManager.Singleton.StartHost();
+        }
+
         StartBroadcasting();
     }
 
@@ -61,7 +67,6 @@ public class LANLobbyManager
             {
                 try
                 {
-                    // Include the actual server IP in the broadcast packet
                     byte[] data = BuildLobbyBroadcastPacket();
                     broadcaster.Send(data, data.Length, endPoint);
                 }
@@ -93,6 +98,7 @@ public class LANLobbyManager
     {
         isBroadcasting = false;
         broadcastThread?.Join();
+        broadcastThread = null;
     }
 
     public void StartListeningForLobbies()
@@ -183,6 +189,7 @@ public class LANLobbyManager
         catch { }
 
         listenThread?.Join(1000);
+        listenThread = null;
 
         listenerClient?.Close();
         listenerClient = null;
@@ -246,6 +253,22 @@ public class LANLobbyManager
         lock (lobbyLock)
         {
             AvailableLobbies.Clear();
+        }
+    }
+
+    public void ResetLanState()
+    {
+        StopBroadcasting();
+        StopListening();
+        ClearLobbies();
+
+        if (NetworkManager.Singleton != null)
+        {
+            var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+            if (transport != null)
+            {
+                transport.SetConnectionData("0.0.0.0", (ushort)GamePort);
+            }
         }
     }
 }

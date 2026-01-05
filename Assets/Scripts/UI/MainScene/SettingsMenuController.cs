@@ -99,7 +99,11 @@ public class SettingsMenuController : MonoBehaviour
         }
         else
         {
-            SceneManager.LoadScene("MultiplayerScreen");
+            if (GameManager.Instance.IsSingleplayer) {
+                SceneManager.LoadScene("ModeSelectionScreen");
+            } else {
+                SceneManager.LoadScene("MultiplayerScreen");
+            }
         }
     }
 
@@ -125,6 +129,14 @@ public class SettingsMenuController : MonoBehaviour
                 NetworkManager.Singleton.Shutdown();
             }
         }
-        SceneManager.LoadScene("MultiplayerScreen");
+
+        if (GameManager.Instance.IsSingleplayer)
+        {
+            SceneManager.LoadScene("ModeSelectionScreen");
+        }
+        else
+        {
+            SceneManager.LoadScene("MultiplayerScreen");
+        }
     }
 }

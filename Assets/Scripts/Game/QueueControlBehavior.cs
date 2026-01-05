@@ -125,6 +125,11 @@ public class QueueControlBehavior : NetworkBehaviour
         int newIndex = (index + 1) % queuedPlayers.Count;
         while (IsPlayerFoldedState(queuedPlayers[newIndex]) && newIndex != index)
         {
+            if (firstPlayer == queuedPlayers[newIndex].player)
+            {
+                passedFirstPlayer = true;
+            }
+
             newIndex = (newIndex + 1) % queuedPlayers.Count;
         }
 
