@@ -274,11 +274,11 @@ public class BettingControlBehavior : NetworkBehaviour
             if (chip != null && chip.NetworkObject != null && chip.NetworkObject.IsSpawned)
             {
                 chip.NetworkObject.Despawn(true);
+                Destroy(chip.gameObject);
             }
         }
         bankChips.Clear();
     }
-
 
     private int FindPlayerStateIndex(ulong playerId)
     {

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -54,18 +55,14 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         {
             if (currentBalance != value)
             {
-                int delta = value - currentBalance;
                 currentBalance = value;
 
                 if (IsServer)
                 {
                     networkBalance.Value = currentBalance;
                     UpdateBalanceClientRpc(currentBalance);
-                }
 
-                if (delta > 0)
-                {
-                    AddChipsServerRpc(delta);
+                    RespawnChipsForBalanceServer();
                 }
 
                 OnBalanceChanged?.Invoke(currentBalance);
@@ -74,6 +71,24 @@ public class PlayerController : NetworkBehaviour, IPlayerController
     }
 
     public event Action<int> OnBalanceChanged;
+
+    public void RequestSetBalance(int newBalance)
+    {
+        if (IsServer)
+        {
+            CurrentBalance = newBalance;
+            return;
+        }
+
+        RequestSetBalanceServerRpc(newBalance);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestSetBalanceServerRpc(int newBalance)
+    {
+        if (!IsServer) return;
+        CurrentBalance = newBalance;
+    }
 
     public int currentBet = 0;
     public List<CardModel> cardsInHand = new List<CardModel>();
@@ -223,6 +238,13 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             Debug.LogError("One or more chip bank references are missing!");
         }
 
+        totalChips.Clear();
+        blackChips.Clear();
+        redChips.Clear();
+        greenChips.Clear();
+        blueChips.Clear();
+        currentBalance = 0;
+
         var allChips = FindObjectsOfType<ChipModel>();
         foreach (var chip in allChips)
         {
@@ -254,10 +276,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         blueChips.Clear();
         currentBalance = 0;
 
-        SpawnChips(ChipColor.black, 25, 4, chipPrefabBlack);
-        SpawnChips(ChipColor.red, 10, 4, chipPrefabRed);
-        SpawnChips(ChipColor.green, 5, 4, chipPrefabGreen);
-        SpawnChips(ChipColor.blue, 1, 5, chipPrefabBlue);
+        RequestSetBalance(165);
 
         currentBalance = totalChips.Sum(c => c.value);
         if (IsServer)
@@ -277,6 +296,58 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         return -1;
     }
 
+    private void RespawnChipsForBalanceServer()
+    {
+        if (!IsServer) return;
+
+        DespawnAllPlayerChipsServer();
+        SpawnChipsForBalanceServer(currentBalance);
+    }
+
+    private void DespawnAllPlayerChipsServer()
+    {
+        if (!IsServer) return;
+
+        var chipsToDespawn = totalChips.Where(c => c != null).ToList();
+        foreach (var chip in chipsToDespawn)
+        {
+            var netObj = chip.GetComponent<NetworkObject>();
+            if (netObj != null && netObj.IsSpawned)
+                netObj.Despawn(true);
+            else
+                Destroy(chip.gameObject);
+        }
+
+        totalChips.Clear();
+        blackChips.Clear();
+        redChips.Clear();
+        greenChips.Clear();
+        blueChips.Clear();
+    }
+
+    private void SpawnChipsForBalanceServer(int balance)
+    {
+        if (!IsServer) return;
+
+        int remaining = Mathf.Max(0, balance);
+        chipCounter = 0;
+
+        int[] chipValues = new int[] { 25, 10, 5, 1 };
+        foreach (int chipValue in chipValues)
+        {
+            while (remaining >= chipValue)
+            {
+                SpawnChips(GetColorForValue(chipValue), chipValue, 1, GetPrefabForValue(chipValue));
+                remaining -= chipValue;
+            }
+        }
+
+        currentBalance = totalChips.Sum(c => c.value);
+        networkBalance.Value = currentBalance;
+        UpdateBalanceClientRpc(currentBalance);
+        OnBalanceChanged?.Invoke(currentBalance);
+    }
+
     private void SpawnChips(ChipColor color, int value, int count, GameObject prefab)
     {
         Transform chipsParent = transform.Find("Chips/" + color.ToString());
@@ -289,7 +360,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         for (int i = 0; i < count; i++)
         {
             GameObject chipGO = Instantiate(prefab, chipsParent);
-            chipGO.transform.localPosition = new Vector3(0, 0.005f * i, 0);
+            chipGO.transform.localPosition = new Vector3(0, 0.2f + 0.005f * i, 0);
 
             var networkObject = chipGO.GetComponent<NetworkObject>();
             if (networkObject != null)
@@ -480,398 +551,68 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         return requiredChipValues.ToArray();
     }
 
-    private void UpdateChipsToMeetRequirements(List<int> chips)
-    {
-        int[] currentChips = new int[4];
-        int[] requiredChips = new int[4];
-
-        int[][] tradeRules = new int[][] {
-            new int[] { 1, -2, -1, 0 },
-            new int[] { 0, 1, -2, 0 },
-            new int[] { 0, 0, 1, -5 }
-        };
-
-        currentChips[0] = totalChips.Count(c => c.color == ChipColor.black);
-        requiredChips[0] = chips.Count(c => c == 25);
-
-        currentChips[1] = totalChips.Count(c => c.color == ChipColor.red);
-        requiredChips[1] = chips.Count(c => c == 10);
-
-        currentChips[2] = totalChips.Count(c => c.color == ChipColor.green);
-        requiredChips[2] = chips.Count(c => c == 5);
-
-        currentChips[3] = totalChips.Count(c => c.color == ChipColor.blue);
-        requiredChips[3] = chips.Count(c => c == 1);
-
-        int[] chipDiff = new int[4];
-        for (int i = 0; i < 4; i++) chipDiff[i] = currentChips[i] - requiredChips[i];
-
-        List<int> actionSequence = new List<int>();
-
-        while (chipDiff.Any(c => c < 0))
-        {
-            int bestRule = -1;
-            int bestSign = 0;
-            int bestScore = int.MinValue;
-
-            for (int r = 0; r < tradeRules.Length; r++)
-            {
-                foreach (int sign in new[] { 1, -1 })
-                {
-                    int[] temp = new int[4];
-                    for (int i = 0; i < 4; i++)
-                        temp[i] = chipDiff[i] + tradeRules[r][i] * sign;
-
-                    int score = 0;
-                    for (int i = 0; i < 4; i++)
-                        if (temp[i] < 0) score += temp[i];
-
-                    if (score > bestScore)
-                    {
-                        bestScore = score;
-                        bestRule = r;
-                        bestSign = sign;
-                    }
-                }
-            }
-
-            actionSequence.Add((bestRule + 1) * bestSign);
-
-            for (int i = 0; i < 4; i++)
-                chipDiff[i] += tradeRules[bestRule][i] * bestSign;
-        }
-
-        foreach (var action in actionSequence)
-        {
-            bool up = action > 0;
-            ChipColor chipColor = action switch
-            {
-                1 => ChipColor.black,
-                2 => ChipColor.red,
-                3 => ChipColor.green,
-                _ => ChipColor.blue
-            };
-
-            if (up) TradeUp(chipColor);
-            else TradeDown(chipColor);
-        }
-    }
-
-    private int IndexOfMostNegative(int[] arr)
-    {
-        int idx = 0;
-        int val = int.MaxValue;
-        for (int i = 0; i < arr.Length; i++)
-            if (arr[i] < val)
-            {
-                val = arr[i];
-                idx = i;
-            }
-        return idx;
-    }
-
-    private bool TradeUp(ChipColor color)
-    {
-        // Use TryGetValue to avoid key exceptions and be explicit about rules
-        Dictionary<ChipColor, ChipColor[]> tradeRules = new Dictionary<ChipColor, ChipColor[]>()
-        {
-            { ChipColor.black, new[] { ChipColor.red, ChipColor.red, ChipColor.green } },
-            { ChipColor.red, new[] { ChipColor.green, ChipColor.green } },
-            { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
-        };
-
-        if (!tradeRules.TryGetValue(color, out var chipsToRemove))
-            return false;
-
-        foreach (var chipToRemove in chipsToRemove)
-        {
-            int currentCount = chipToRemove switch
-            {
-                ChipColor.black => blackChips.Count,
-                ChipColor.red => redChips.Count,
-                ChipColor.green => greenChips.Count,
-                ChipColor.blue => blueChips.Count,
-                _ => 0
-            };
-
-            if (currentCount == 0)
-            {
-                if (!TradeUp(chipToRemove)) return false;
-            }
-
-            RemoveChipInstance(chipToRemove);
-        }
-
-        AddChipInstance(color);
-
-        return true;
-    }
-
-    private bool TradeDown(ChipColor color)
-    {
-        Dictionary<ChipColor, ChipColor[]> tradeRules = new Dictionary<ChipColor, ChipColor[]>()
-        {
-            { ChipColor.black, new[] { ChipColor.red, ChipColor.red, ChipColor.green } },
-            { ChipColor.red, new[] { ChipColor.green, ChipColor.green } },
-            { ChipColor.green, new[] { ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue, ChipColor.blue } }
-        };
-
-        if (!tradeRules.TryGetValue(color, out var chipsToRemove))
-            return false;
-
-        foreach (var chipToRemove in chipsToRemove)
-        {
-            AddChipInstance(chipToRemove);
-        }
-
-        RemoveChipInstance(color);
-
-        return true;
-    }
-
-    private void AddChipInstance(ChipColor color)
-    {
-        int value;
-        GameObject prefab;
-
-        (value, prefab) = color switch {
-            ChipColor.black => (25, chipPrefabBlack),
-            ChipColor.red => (10, chipPrefabRed),
-            ChipColor.green => (5, chipPrefabGreen),
-            ChipColor.blue => (1, chipPrefabBlue),
-            _ => (0, null)
-        };
-
-        SpawnChips(color, value, 1, prefab);
-    }
-
-    private void RemoveChipInstance(ChipColor color)
-    {
-        var chip = DropChip(color);
-        if (chip == null) return;
-
-        var netObj = chip.GetComponent<NetworkObject>();
-        if (netObj != null && netObj.IsSpawned)
-        {
-            netObj.Despawn(true);
-        }
-        else
-        {
-            Destroy(chip.gameObject);
-        }
-    }
-
     public List<ChipModel> RemoveChip(int bet)
     {
         if (bet <= 0) return new List<ChipModel>();
 
-        int originalBalance = currentBalance;
+        int betToRemove = Mathf.Clamp(bet, 0, currentBalance);
+        if (betToRemove == 0) return new List<ChipModel>();
+        List<ChipModel> movedToBank = RequiredChips(bet)
+            .Select(value => CreateChipForColor(value)).ToList();
 
-        if (bet >= originalBalance)
+        if (IsServer)
         {
-            var allChips = totalChips.ToList();
-            if (allChips.Count > 0)
-            {
-                var chipIds = allChips.Select(c => (ulong)c.chipId).ToArray();
-                MoveChipsToBankServerRpc(chipIds);
-
-                blackChips.Clear();
-                redChips.Clear();
-                greenChips.Clear();
-                blueChips.Clear();
-                totalChips.Clear();
-
-                currentBalance = 0;
-                if (IsServer)
-                {
-                    networkBalance.Value = currentBalance;
-                    UpdateBalanceClientRpc(currentBalance);
-                }
-            }
-            return allChips.Count > 0 ? allChips : null;
+            CurrentBalance = currentBalance - betToRemove;
+        }
+        else
+        {
+            RequestSetBalance(currentBalance - betToRemove);
         }
 
-        List<ChipModel> chipsToRemove = new List<ChipModel>();
-        int[] chipValues = new int[] { 25, 10, 5, 1 };
-        int remaining = bet;
-
-        foreach (int chipValue in chipValues)
-        {
-            while (remaining >= chipValue)
-            {
-                ChipModel chip = GetChipByValue(chipValue);
-                if (chip != null)
-                {
-                    chipsToRemove.Add(chip);
-                    switch (chip.color)
-                    {
-                        case ChipColor.black: blackChips.Remove(chip); break;
-                        case ChipColor.red: redChips.Remove(chip); break;
-                        case ChipColor.green: greenChips.Remove(chip); break;
-                        case ChipColor.blue: blueChips.Remove(chip); break;
-                    }
-
-                    remaining -= chipValue;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-
-        if (remaining == 0 && chipsToRemove.Count > 0)
-        {
-            var chipIds = chipsToRemove.Select(c => (ulong)c.chipId).ToArray();
-            MoveChipsToBankServerRpc(chipIds);
-            return chipsToRemove;
-        }
-
-        int chipValueToBreak = 0;
-        foreach (var value in chipValues.Reverse())
-        {
-            if (remaining < value)
-            {
-                chipValueToBreak = value;
-                break;
-            }
-        }
-
-        RemoveChipInstance(GetColorForValue(chipValueToBreak));
-
-        var bankSpawn = remaining;
-        var playerSpawn = chipValueToBreak - remaining;
-
-        List<ChipColor> chipsToSpawn = new List<ChipColor>();
-        List<ChipColor> chipsToReturn = new List<ChipColor>();
-        foreach (int chipValue in chipValues)
-        {
-            while (bankSpawn >= chipValue)
-            {
-                chipsToSpawn.Add(GetColorForValue(chipValue));
-                bankSpawn -= chipValue;
-            }
-
-            while (playerSpawn >= chipValue)
-            {
-                chipsToSpawn.Add(GetColorForValue(chipValue));
-                chipsToReturn.Add(GetColorForValue(chipValue));
-                playerSpawn -= chipValue;
-            }
-        }
-
-        SpawnChips(chipsToSpawn);
-
-        Debug.LogWarning($"Returning chips to bank to complete removal of {bet}");
-
-        foreach (var chipColor in chipsToReturn)
-        {
-            var chip = GetChipByValue(GetValueByColor(chipColor));
-            totalChips.Remove(chip);
-            switch (chip.color)
-            {
-                case ChipColor.black: blackChips.Remove(chip); break;
-                case ChipColor.red: redChips.Remove(chip); break;
-                case ChipColor.green: greenChips.Remove(chip); break;
-                case ChipColor.blue: blueChips.Remove(chip); break;
-            }
-            chipsToRemove.Add(chip);
-        }
-
-        MoveChipsToBankServerRpc(chipsToRemove.Select(c => (ulong)c.chipId).ToArray());
-
-        return chipsToRemove;
+        return movedToBank;
     }
 
-    void SpawnChips(List<ChipColor> chips)
+    ChipModel CreateChipForColor(int value)
     {
-        foreach (var chipGroup in chips.GroupBy(c => c))
+        var prefab = GetColorForValue(value) switch
         {
-            var color = chipGroup.ToList()[0];
-            SpawnChips(
-                chipGroup.ToList()[0],
-                GetValueByColor(color),
-                chipGroup.Count(), 
-                GetPrefabForValue(
-                    GetValueByColor(color)
-                )
-            );
-        }
-    }
+            ChipColor.black => chipPrefabBlack,
+            ChipColor.red => chipPrefabRed,
+            ChipColor.green => chipPrefabGreen,
+            ChipColor.blue => chipPrefabBlue,
+            _ => chipPrefabBlue
+        };
 
-    int GetValueByColor(ChipColor color)
-    {
-        switch (color)
+        var parent = GetColorForValue(value) switch
         {
-            case ChipColor.black:
-                return 25;
-            case ChipColor.red:
-                return 10;
-            case ChipColor.green:
-                return 5;
-            case ChipColor.blue:
-                return 1;
-        }
+            ChipColor.black => chipBankBlack,
+            ChipColor.red => chipBankRed,
+            ChipColor.green => chipBankGreen,
+            ChipColor.blue => chipBankBlue,
+            _ => chipBankBlue
+        };
 
-        return 0;
-    }
+        GameObject chipGO = Instantiate(prefab, parent);
+        chipGO.transform.localPosition = new Vector3(0, 0.02f, 0);
 
-    ChipModel DropChip(ChipColor color)
-    {
-        switch (color)
+        var networkObject = chipGO.GetComponent<NetworkObject>();
+        if (networkObject != null)
         {
-            case ChipColor.black:
-                var blackChip = blackChips.FirstOrDefault();
-                if (blackChip != null)
-                {
-                    blackChips.Remove(blackChip);
-                    totalChips.Remove(blackChip);
-                }
-                return blackChip;
-            case ChipColor.red:
-                var redChip = redChips.FirstOrDefault();
-                if (redChip != null)
-                {
-                    redChips.Remove(redChip);
-                    totalChips.Remove(redChip);
-                }
-                return redChip;
-            case ChipColor.green:
-                var greenChip = greenChips.FirstOrDefault();
-                if (greenChip != null)
-                {
-                    greenChips.Remove(greenChip);
-                    totalChips.Remove(greenChip);
-                }
-                return greenChip;
-            case ChipColor.blue:
-                var blueChip = blueChips.FirstOrDefault();
-                if (blueChip != null)
-                {
-                    blueChips.Remove(blueChip);
-                    totalChips.Remove(blueChip);
-                }
-                return blueChip;
-            default:
-                return null;
+            networkObject.SpawnWithOwnership(OwnerClientId);
         }
-    }
 
-    ChipModel GetChipByValue(int value)
-    {
-        switch (value)
+        var chipModel = chipGO.GetComponent<ChipModel>();
+        chipModel.value = value;
+        chipModel.color = GetColorForValue(value);
+        chipModel.ownerClientId.Value = OwnerClientId;
+
+        if (IsServer)
         {
-            case 25:
-                return blackChips.FirstOrDefault();
-            case 10:
-                return redChips.FirstOrDefault();
-            case 5:
-                return greenChips.FirstOrDefault();
-            case 1:
-                return blueChips.FirstOrDefault();
-            default:
-                return null;
+            chipModel.chipId = GenerateChipId();
+            Debug.Log($"Spawned chip ID: {chipModel.chipId} for player {OwnerClientId}");
         }
+
+         return chipModel;
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -982,7 +723,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
     [ClientRpc]
     public void UpdateBalanceClientRpc(int newBalance)
     {
-        if (!IsServer) // Only update on clients
+        if (!IsServer)
         {
             Debug.Log($"Client {OwnerClientId} received balance update: {newBalance}");
             currentBalance = newBalance;
