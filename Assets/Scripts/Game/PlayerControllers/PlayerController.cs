@@ -1411,6 +1411,8 @@ public class PlayerController : NetworkBehaviour, IPlayerController
         {
             isMyTurn.Value = myTurn;
         }
+
+        if (IsOwner) GetAvailableActions();
     }
 
     public void SetModelVisibility(bool visible)

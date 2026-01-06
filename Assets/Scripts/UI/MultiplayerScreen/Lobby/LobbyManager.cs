@@ -123,7 +123,6 @@ public class LANLobbyManager
 
     public void StopBroadcasting()
     {
-        // Notify listeners promptly before stopping the broadcast loop.
         SendLobbyCloseBroadcast();
 
         isBroadcasting = false;
