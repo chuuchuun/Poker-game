@@ -12,11 +12,14 @@ public class LANLobbyManager
     private const string MsgOpen = "OPEN";
     private const string MsgClose = "CLOSE";
 
+    private const int LobbyStaleTimeoutMs = 3500;
+
     private static LANLobbyManager _instance;
     public static LANLobbyManager Instance => _instance ??= new LANLobbyManager();
 
     public List<LobbyInfo> AvailableLobbies { get; private set; } = new List<LobbyInfo>();
     private readonly object lobbyLock = new object();
+    private readonly Dictionary<string, long> lobbyLastSeenTicks = new Dictionary<string, long>();
 
     public int BroadcastPort { get; set; } = 47777;
     public int GamePort { get; set; } = 7777;
@@ -54,6 +57,7 @@ public class LANLobbyManager
         {
             UdpClient broadcaster = new UdpClient();
             broadcaster.EnableBroadcast = true;
+            broadcaster.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
             IPEndPoint endPoint = new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
 
@@ -100,6 +104,7 @@ public class LANLobbyManager
             using (UdpClient broadcaster = new UdpClient())
             {
                 broadcaster.EnableBroadcast = true;
+                broadcaster.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 IPEndPoint endPoint = new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
                 byte[] data = BuildLobbyBroadcastPacket(MsgClose);
 
@@ -153,6 +158,9 @@ public class LANLobbyManager
         receivingSocket.EnableBroadcast = true;
         receivingSocket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         receivingSocket.Client.Bind(new IPEndPoint(IPAddress.Any, BroadcastPort));
+        receivingSocket.Client.ReceiveTimeout = 1000;
+
+        listenerClient = receivingSocket;
 
         while (isListening)
         {
@@ -190,9 +198,12 @@ public class LANLobbyManager
 
                 lock (lobbyLock)
                 {
+                    lobbyLastSeenTicks[lobbyId] = DateTime.UtcNow.Ticks;
+
                     if (messageType == MsgClose)
                     {
                         AvailableLobbies.RemoveAll(l => l.LobbyId == lobbyId);
+                        lobbyLastSeenTicks.Remove(lobbyId);
                         continue;
                     }
 
@@ -215,6 +226,16 @@ public class LANLobbyManager
                         existing.MaxPlayers = maxPlayers;
                         existing.IPAddress = lobbyIP;
                     }
+
+                    EvictStaleLobbies_NoLock();
+                }
+            }
+            catch (SocketException)
+            {
+                // Timeout: periodically evict lobbies that have stopped broadcasting.
+                lock (lobbyLock)
+                {
+                    EvictStaleLobbies_NoLock();
                 }
             }
             catch (Exception e)
@@ -225,6 +246,10 @@ public class LANLobbyManager
         }
 
         receivingSocket.Close();
+        if (ReferenceEquals(listenerClient, receivingSocket))
+        {
+            listenerClient = null;
+        }
     }
 
     public void StopListening()
@@ -306,6 +331,35 @@ public class LANLobbyManager
         lock (lobbyLock)
         {
             AvailableLobbies.Clear();
+            lobbyLastSeenTicks.Clear();
+        }
+    }
+
+    private void EvictStaleLobbies_NoLock()
+    {
+        long nowTicks = DateTime.UtcNow.Ticks;
+        long timeoutTicks = LobbyStaleTimeoutMs * TimeSpan.TicksPerMillisecond;
+
+        if (lobbyLastSeenTicks.Count == 0)
+            return;
+
+        List<string> staleIds = null;
+        foreach (var kvp in lobbyLastSeenTicks)
+        {
+            if (nowTicks - kvp.Value > timeoutTicks)
+            {
+                staleIds ??= new List<string>();
+                staleIds.Add(kvp.Key);
+            }
+        }
+
+        if (staleIds == null)
+            return;
+
+        foreach (var id in staleIds)
+        {
+            AvailableLobbies.RemoveAll(l => l.LobbyId == id);
+            lobbyLastSeenTicks.Remove(id);
         }
     }
 }
