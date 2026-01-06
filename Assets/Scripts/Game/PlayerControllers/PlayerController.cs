@@ -592,7 +592,7 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             _ => chipBankBlue
         };
 
-        GameObject chipGO = Instantiate(prefab, chipBank);
+        GameObject chipGO = Instantiate(prefab, parent);
         chipGO.transform.localPosition = new Vector3(0, 0.02f, 0);
 
         var networkObject = chipGO.GetComponent<NetworkObject>();
