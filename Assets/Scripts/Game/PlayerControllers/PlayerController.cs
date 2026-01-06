@@ -86,7 +86,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
     private TMP_Text reraiseText;
     private TMP_Text chipsText;
 
-    private bool isRoundStarted = false;
     private int spawnIndex = -1;
     private int chipCounter = 0;
     public NetworkVariable<bool> isMyTurn = new NetworkVariable<bool>();
@@ -99,9 +98,30 @@ public class PlayerController : NetworkBehaviour, IPlayerController
     [SerializeField] private GameObject chipPrefabGreen;
     [SerializeField] private GameObject chipPrefabBlue;
     [SerializeField] private GameObject balancePrefab;
+
+    private bool isExitingToMenu;
+
     public override void OnNetworkSpawn()
     {
+        currentBet = 0;
+        pendingAction = BetAction.start;
+        pendingBetAmount = 0;
+        chipCounter = 0;
+        cardsInHand.Clear();
+        totalChips.Clear();
+        blackChips.Clear();
+        redChips.Clear();   
+        greenChips.Clear();
+        blueChips.Clear();  
+        currentBalance = 0;
+
         playerId = OwnerClientId;
+
+        if (IsOwner && NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback -= OnLocalClientDisconnected;
+            NetworkManager.Singleton.OnClientDisconnectCallback += OnLocalClientDisconnected;
+        }
 
         Debug.Log($"Player {OwnerClientId} spawned - IsServer: {IsServer}, IsHost: {IsHost}, IsOwner: {IsOwner}");
 
@@ -131,6 +151,36 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             Debug.Log($"Client {OwnerClientId} waiting to find chips");
             Invoke(nameof(FindMyChips), 0.5f);
         }
+    }
+
+    public override void OnDestroy()
+    {
+        if (IsOwner && NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback -= OnLocalClientDisconnected;
+        }
+    }
+
+    private void OnLocalClientDisconnected(ulong clientId)
+    {
+        if (isExitingToMenu) return;
+        if (NetworkManager.Singleton == null) return;
+        if (clientId != NetworkManager.Singleton.LocalClientId) return;
+
+        isExitingToMenu = true;
+
+        NetworkManager.Singleton?.Shutdown();
+
+        if (GameManager.Instance != null && GameManager.Instance.IsSingleplayer)
+        {
+            SceneManager.LoadScene("ModeSelectionScreen");
+        }
+        else
+        {
+            SceneManager.LoadScene("MultiplayerScreen");
+        }
+
+        Cursor.lockState = CursorLockMode.None;
     }
 
     private void OnNetworkBalanceChanged(int oldValue, int newValue)
@@ -588,7 +638,8 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             ChipColor.black => (25, chipPrefabBlack),
             ChipColor.red => (10, chipPrefabRed),
             ChipColor.green => (5, chipPrefabGreen),
-            ChipColor.blue => (1, chipPrefabBlue)
+            ChipColor.blue => (1, chipPrefabBlue),
+            _ => (0, null)
         };
 
         SpawnChips(color, value, 1, prefab);
@@ -1280,7 +1331,6 @@ public class PlayerController : NetworkBehaviour, IPlayerController
             LobbyController lobbyController = FindObjectOfType<LobbyController>();
             if (lobbyController != null && !lobbyController.HasStartedGame())
             {
-                ulong userID = NetworkManager.Singleton.LocalClientId;
                 lobbyController.ToggleReadiness();
                 return;
             }

@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 
 public class GameManager : NetworkBehaviour
 {
-    public static GameManager Instance;
+    public static GameManager Instance => FindObject();
     public GameObject playerPrefab;
     public GameObject botPrefab;
     public Transform[] spawnPoints;
@@ -15,28 +15,55 @@ public class GameManager : NetworkBehaviour
     public bool IsSingleplayer = false;
 
     private Dictionary<ulong, int> playerSpawnIndices = new Dictionary<ulong, int>();
-    private LobbyController lobbyController;
+    private LobbyController lobbyController => GetComponent<LobbyController>();
     private bool isChatSpawned = false;
 
     private bool botsSpawned = false;
 
-    private void Awake()
+    private bool EnsureSpawnPointsInitialized()
     {
-        lobbyController = GetComponent<LobbyController>();
-        if (Instance == null)
+        if (spawnPoints != null && spawnPoints.Length > 0 && spawnPoints.All(sp => sp != null))
         {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
+            return true;
         }
-        else if (Instance != this)
+
+        var found = GameObject.FindGameObjectsWithTag("SpawnPoint")
+            .Select(go => go.transform) 
+            .Where(t => t != null)
+            .OrderBy(obj => obj.name)
+            .ToArray(); 
+
+        if (found.Length == 0)
         {
-            Destroy(gameObject);
+            Debug.LogError("No spawn points found. Assign spawnPoints in the inspector or tag objects as 'SpawnPoint'.");
+            return false;
         }
+
+        spawnPoints = found;
+        return true;
+    }
+
+    private static GameManager FindObject()
+    {
+        var activeScene = SceneManager.GetActiveScene();
+        if (!activeScene.IsValid() || !activeScene.isLoaded)
+            return null;
+
+        var roots = activeScene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            var gm = roots[i].GetComponentInChildren<GameManager>(true);
+            if (gm != null)
+                return gm;
+        }
+
+        return null;
     }
 
     private void Start()
     {
-        NetworkManager.Singleton.OnServerStarted += OnServerStarted;
+        NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
 
@@ -48,13 +75,14 @@ public class GameManager : NetworkBehaviour
 
     override public void OnDestroy()
     {
-        NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
     }
 
     public void StartHost()
     {
+        botsSpawned = false;
+        playerSpawnIndices = new Dictionary<ulong, int>();
         NetworkManager.Singleton.StartHost();
         StartCoroutine(DelayedSpawnHost());
     }
@@ -73,6 +101,9 @@ public class GameManager : NetworkBehaviour
 
     private int GetFirstAvailableSpawnIndex()
     {
+        if (!EnsureSpawnPointsInitialized())
+            return -1;
+
         var used = new HashSet<int>(playerSpawnIndices.Values);
         for (int i = 0; i < spawnPoints.Length; i++)
         {
@@ -107,6 +138,7 @@ public class GameManager : NetworkBehaviour
     private void SpawnPlayer(ulong clientId, int spawnIndex)
     {
         if (!IsServer) return;
+        if (!EnsureSpawnPointsInitialized()) return;
 
         Transform spawnPoint = spawnPoints[spawnIndex];
         GameObject player = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);
@@ -123,6 +155,7 @@ public class GameManager : NetworkBehaviour
     private void SpawnBotsAfterPlayer()
     {
         if (!IsServer) return;
+        if (!EnsureSpawnPointsInitialized()) return;
         if (botPrefab == null)
         {
             Debug.LogError("Bot prefab is not assigned in GameManager!");
@@ -153,6 +186,7 @@ public class GameManager : NetworkBehaviour
     private void SpawnBot(int spawnIndex, int botIndex)
     {
         if (!IsServer) return;
+        if (!EnsureSpawnPointsInitialized()) return;
         if (botPrefab == null)
         {
             Debug.LogError("Bot prefab is not assigned in GameManager!");
@@ -182,10 +216,6 @@ public class GameManager : NetworkBehaviour
             botController.playerId = syntheticBotId;
         }
 
-        if (lobbyController == null)
-        {
-            lobbyController = GetComponent<LobbyController>();
-        }
         lobbyController?.RegisterBot(syntheticBotId, true);
 
         Debug.Log($"Spawned bot #{botIndex} at spawn index {spawnIndex} (syntheticId={syntheticBotId})");
@@ -268,15 +298,10 @@ public class GameManager : NetworkBehaviour
         }
     }
 
-    private void OnServerStarted()
-    {
-        AssignSpawnPoint(NetworkManager.Singleton.LocalClientId);
-    }
-
     private void OnClientConnected(ulong clientId)
     {
+        if (clientId == 0) return;
         AssignSpawnPoint(clientId);
-
         if (IsServer && ChatManager.Instance != null)
         {
             ChatManager.Instance.SendPlayerJoinedServerRpc(clientId);

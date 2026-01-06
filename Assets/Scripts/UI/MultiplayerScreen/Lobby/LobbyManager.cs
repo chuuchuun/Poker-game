@@ -9,6 +9,9 @@ using Unity.Netcode.Transports.UTP;
 
 public class LANLobbyManager
 {
+    private const string MsgOpen = "OPEN";
+    private const string MsgClose = "CLOSE";
+
     private static LANLobbyManager _instance;
     public static LANLobbyManager Instance => _instance ??= new LANLobbyManager();
 
@@ -30,23 +33,14 @@ public class LANLobbyManager
 
     private LANLobbyManager() { }
 
-    public void PrepareHostTransport()
+    public void StartHostLAN()
     {
         var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
         transport.SetConnectionData("0.0.0.0", (ushort)GamePort);
 
         serverIPAddress = GetLocalIPAddress();
-    }
 
-    public void StartHostLAN()
-    {
-        PrepareHostTransport();
-
-        if (!NetworkManager.Singleton.IsHost)
-        {
-            NetworkManager.Singleton.StartHost();
-        }
-
+        NetworkManager.Singleton.StartHost();
         StartBroadcasting();
     }
 
@@ -67,7 +61,7 @@ public class LANLobbyManager
             {
                 try
                 {
-                    byte[] data = BuildLobbyBroadcastPacket();
+                    byte[] data = BuildLobbyBroadcastPacket(MsgOpen);
                     broadcaster.Send(data, data.Length, endPoint);
                 }
                 catch (Exception e)
@@ -85,20 +79,58 @@ public class LANLobbyManager
         broadcastThread.Start();
     }
 
-    private byte[] BuildLobbyBroadcastPacket()
+    private byte[] BuildLobbyBroadcastPacket(string messageType)
     {
         int currentPlayers = NetworkManager.Singleton?.ConnectedClientsList.Count ?? 0;
         int maxPlayers = 6;
 
-        string packet = $"{LobbyName}|{currentPlayers}|{maxPlayers}|{serverIPAddress}";
+        string packet = $"{messageType}|{LobbyName}|{currentPlayers}|{maxPlayers}|{serverIPAddress}";
         return Encoding.UTF8.GetBytes(packet);
+    }
+
+    private void SendLobbyCloseBroadcast(int repeatCount = 3)
+    {
+        if (string.IsNullOrEmpty(serverIPAddress))
+        {
+            serverIPAddress = GetLocalIPAddress();
+        }
+
+        try
+        {
+            using (UdpClient broadcaster = new UdpClient())
+            {
+                broadcaster.EnableBroadcast = true;
+                IPEndPoint endPoint = new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
+                byte[] data = BuildLobbyBroadcastPacket(MsgClose);
+
+                for (int i = 0; i < repeatCount; i++)
+                {
+                    broadcaster.Send(data, data.Length, endPoint);
+                    Thread.Sleep(100);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            UnityEngine.Debug.LogWarning($"Close broadcast error: {e.Message}");
+        }
     }
 
     public void StopBroadcasting()
     {
+        // Notify listeners promptly before stopping the broadcast loop.
+        SendLobbyCloseBroadcast();
+
         isBroadcasting = false;
-        broadcastThread?.Join();
+
+        try
+        {
+            broadcastThread?.Join(500);
+        }
+        catch { }
+
         broadcastThread = null;
+        ClearLobbies();
     }
 
     public void StartListeningForLobbies()
@@ -130,37 +162,58 @@ public class LANLobbyManager
                 string packet = Encoding.UTF8.GetString(data);
                 string[] parts = packet.Split('|');
 
-                if (parts.Length >= 3)
+                if (parts.Length < 3)
+                    continue;
+
+                // New format: TYPE|NAME|CUR|MAX|IP
+                // Old format: NAME|CUR|MAX|IP
+                string messageType = MsgOpen;
+                int offset = 0;
+                if (string.Equals(parts[0], MsgOpen, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(parts[0], MsgClose, StringComparison.OrdinalIgnoreCase))
                 {
-                    string lobbyName = parts[0];
-                    int currentPlayers = int.Parse(parts[1]);
-                    int maxPlayers = int.Parse(parts[2]);
+                    messageType = parts[0].ToUpperInvariant();
+                    offset = 1;
+                }
 
-                    string lobbyIP = parts.Length >= 4 ? parts[3] : from.Address.ToString();
+                if (parts.Length < (3 + offset))
+                    continue;
 
-                    string lobbyId = $"{lobbyIP}:{GamePort}";
+                string lobbyName = parts[0 + offset];
+                if (!int.TryParse(parts[1 + offset], out int currentPlayers))
+                    continue;
+                if (!int.TryParse(parts[2 + offset], out int maxPlayers))
+                    continue;
 
-                    lock (lobbyLock)
+                string lobbyIP = parts.Length >= (4 + offset) ? parts[3 + offset] : from.Address.ToString();
+                string lobbyId = $"{lobbyIP}:{GamePort}";
+
+                lock (lobbyLock)
+                {
+                    if (messageType == MsgClose)
                     {
-                        var existing = AvailableLobbies.Find(l => l.LobbyId == lobbyId);
+                        AvailableLobbies.RemoveAll(l => l.LobbyId == lobbyId);
+                        continue;
+                    }
 
-                        if (existing == null)
-                        {
-                            AvailableLobbies.Add(new LobbyInfo(
-                                id: lobbyId,
-                                name: lobbyName,
-                                currentPlayers: currentPlayers,
-                                maxPlayers: maxPlayers,
-                                ipAddress: lobbyIP
-                            ));
-                        }
-                        else
-                        {
-                            existing.LobbyName = lobbyName;
-                            existing.CurrentPlayers = currentPlayers;
-                            existing.MaxPlayers = maxPlayers;
-                            existing.IPAddress = lobbyIP;
-                        }
+                    var existing = AvailableLobbies.Find(l => l.LobbyId == lobbyId);
+
+                    if (existing == null)
+                    {
+                        AvailableLobbies.Add(new LobbyInfo(
+                            id: lobbyId,
+                            name: lobbyName,
+                            currentPlayers: currentPlayers,
+                            maxPlayers: maxPlayers,
+                            ipAddress: lobbyIP
+                        ));
+                    }
+                    else
+                    {
+                        existing.LobbyName = lobbyName;
+                        existing.CurrentPlayers = currentPlayers;
+                        existing.MaxPlayers = maxPlayers;
+                        existing.IPAddress = lobbyIP;
                     }
                 }
             }
@@ -189,7 +242,6 @@ public class LANLobbyManager
         catch { }
 
         listenThread?.Join(1000);
-        listenThread = null;
 
         listenerClient?.Close();
         listenerClient = null;
@@ -244,6 +296,7 @@ public class LANLobbyManager
             }
             catch { }
 
+
             return "127.0.0.1";
         }
     }
@@ -253,22 +306,6 @@ public class LANLobbyManager
         lock (lobbyLock)
         {
             AvailableLobbies.Clear();
-        }
-    }
-
-    public void ResetLanState()
-    {
-        StopBroadcasting();
-        StopListening();
-        ClearLobbies();
-
-        if (NetworkManager.Singleton != null)
-        {
-            var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-            if (transport != null)
-            {
-                transport.SetConnectionData("0.0.0.0", (ushort)GamePort);
-            }
         }
     }
 }

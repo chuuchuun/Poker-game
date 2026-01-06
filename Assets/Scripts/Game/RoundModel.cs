@@ -75,13 +75,6 @@ public class RoundModel : NetworkBehaviour
                 orderedPlayerModels.Add(pm);
         }
 
-        foreach (var pm in playerModels)
-        {
-            if (!orderedPlayerModels.Contains(pm))
-                orderedPlayerModels.Add(pm);
-        }
-
-
         deckControlBehavior.DealCards(orderedPlayerModels);
 
         IPlayerController firstPlayer = orderedPlayerModels.FirstOrDefault(p => p.PlayerId == firstPlayerId)

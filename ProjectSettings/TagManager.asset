@@ -20,6 +20,7 @@ TagManager:
   - balance_tag
   - balance_canvas
   - chips_text
+  - SpawnPoint
   layers:
   - Default
   - TransparentFX

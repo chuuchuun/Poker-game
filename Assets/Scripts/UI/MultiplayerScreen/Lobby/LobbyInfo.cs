@@ -1,4 +1,3 @@
-// Updated LobbyInfo class to ensure proper IP handling
 public class LobbyInfo
 {
     public string LobbyId { get; set; }

@@ -4,18 +4,10 @@ using UnityEngine.SceneManagement;
 
 public class ModeSelectionScreenFlowCoordinatorImpl : ModeSelectionScreenFlowCoordinator
 {
-    public void OnEnable()
-    {
-        SceneManager.sceneLoaded += OnSceneLoaded;
-    }
-
-    public void OnDisable()
-    {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-    }
-
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+
         Debug.Log("Starting Host...");
         GameManager.Instance.IsSingleplayer = true;
         GameManager.Instance.StartHost();
@@ -28,6 +20,7 @@ public class ModeSelectionScreenFlowCoordinatorImpl : ModeSelectionScreenFlowCoo
 
     public void SingleplayerMode()
     {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
         SceneManager.sceneLoaded += OnSceneLoaded;
         SceneManager.LoadScene("MainScene");
     }

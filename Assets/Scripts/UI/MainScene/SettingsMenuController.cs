@@ -32,6 +32,37 @@ public class SettingsMenuController : MonoBehaviour
         AudioListener.volume = savedVolume;
     }
 
+    private void OnEnable()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+            NetworkManager.Singleton.OnServerStopped += OnServerStopped;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
+            NetworkManager.Singleton.OnServerStopped -= OnServerStopped;
+        }
+    }
+
+    private void OnServerStopped(bool _)
+    {
+        ExitLobby();
+    }
+
+    private void OnClientDisconnected(ulong clientId)
+    {
+        if (NetworkManager.Singleton != null && clientId == NetworkManager.Singleton.LocalClientId)
+        {
+            ExitLobby();
+        }
+    }
+
     private void Start()
     {
         if (volumeSlider != null)
@@ -123,6 +154,7 @@ public class SettingsMenuController : MonoBehaviour
             if (NetworkManager.Singleton.IsHost)
             {
                 NetworkManager.Singleton.Shutdown();
+                LANLobbyManager.Instance.StopBroadcasting();
             }
             else if (NetworkManager.Singleton.IsClient)
             {
