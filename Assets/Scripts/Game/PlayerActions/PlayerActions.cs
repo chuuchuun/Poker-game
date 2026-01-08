@@ -43,7 +43,6 @@ public class SkipAction : IPlayerAction
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
         serializer.SerializeValue(ref currentBet);
-        // Do NOT serialize IPlayerController reference
     }
 }
 

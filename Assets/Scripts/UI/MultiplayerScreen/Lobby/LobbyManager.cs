@@ -172,8 +172,6 @@ public class LANLobbyManager
                 if (parts.Length < 3)
                     continue;
 
-                // New format: TYPE|NAME|CUR|MAX|IP
-                // Old format: NAME|CUR|MAX|IP
                 string messageType = MsgOpen;
                 int offset = 0;
                 if (string.Equals(parts[0], MsgOpen, StringComparison.OrdinalIgnoreCase) ||
@@ -231,7 +229,6 @@ public class LANLobbyManager
             }
             catch (SocketException)
             {
-                // Timeout: periodically evict lobbies that have stopped broadcasting.
                 lock (lobbyLock)
                 {
                     EvictStaleLobbies_NoLock();

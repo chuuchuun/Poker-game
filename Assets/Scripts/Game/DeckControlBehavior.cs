@@ -129,7 +129,6 @@ public class DeckControlBehavior : NetworkBehaviour
                 player.CardsInHand.Add(card);
                 deck.Remove(cardRef);
 
-                // Use the player's NetworkObject for the RPC reference
                 UpdateCardPositionClientRpc(
                     cardRef,
                     new NetworkObjectReference(player.NetworkObject),

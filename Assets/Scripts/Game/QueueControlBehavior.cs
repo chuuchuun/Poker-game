@@ -192,23 +192,19 @@ public class QueueControlBehavior : NetworkBehaviour
     {
         if (queuedPlayers == null || queuedPlayers.Count == 0) return;
 
-        // Remove the entries for this player
         queuedPlayers.RemoveAll(s => s.player != null && s.player.PlayerId == playerId);
 
-        // Adjust firstPlayer if it referenced removed player
         if (firstPlayer != null && firstPlayer.PlayerId == playerId)
         {
             firstPlayer = queuedPlayers.FirstOrDefault(s => s.player != null)?.player;
         }
 
-        // If the kicked player had the turn, advance to next appropriate player
         if (waitingForTurnPlayer != null && waitingForTurnPlayer.PlayerId == playerId)
         {
             waitingForTurnPlayer = queuedPlayers.FirstOrDefault(s => !IsPlayerFoldedState(s) && s.player != null)?.player;
             waitingForTurnPlayer?.NotifyTurn(true);
         }
 
-        // If after removal there are no players, clear pointers
         if (queuedPlayers.Count == 0)
         {
             firstPlayer = null;

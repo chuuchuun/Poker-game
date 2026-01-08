@@ -111,15 +111,15 @@ public class BotController : NetworkBehaviour, IPlayerController
         int preset = UnityEngine.Random.Range(0, 3);
         switch (preset)
         {
-            case 0: // conservative
+            case 0:
                 aiAggressiveness = UnityEngine.Random.Range(0.15f, 0.35f);
                 aiBluffChance = UnityEngine.Random.Range(0.02f, 0.06f);
                 break;
-            case 1: // balanced
+            case 1:
                 aiAggressiveness = UnityEngine.Random.Range(0.45f, 0.65f);
                 aiBluffChance = UnityEngine.Random.Range(0.06f, 0.12f);
                 break;
-            default: // aggressive
+            default:
                 aiAggressiveness = UnityEngine.Random.Range(0.75f, 0.95f);
                 aiBluffChance = UnityEngine.Random.Range(0.10f, 0.20f);
                 break;

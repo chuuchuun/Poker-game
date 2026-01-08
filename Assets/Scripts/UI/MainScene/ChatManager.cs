@@ -17,18 +17,18 @@ public class ChatManager : NetworkBehaviour
     [SerializeField] private float messageLifetime = 10f;
 
     [Header("Screen Size Settings")]
-    [SerializeField] private float widthPercentage = 0.25f; // 25% of screen width
-    [SerializeField] private float heightPercentage = 0.3f; // 30% of screen height
-    [SerializeField] private float rightMargin = 20f; // Pixels from right edge
-    [SerializeField] private float bottomMargin = 20f; // Pixels from bottom edge
-    [SerializeField] private float topMargin = 40f; // Space for chat header
+    [SerializeField] private float widthPercentage = 0.25f;
+    [SerializeField] private float heightPercentage = 0.3f;
+    [SerializeField] private float rightMargin = 20f;
+    [SerializeField] private float bottomMargin = 20f;
+    [SerializeField] private float topMargin = 40f;
 
     [Header("Font Settings")]
-    [SerializeField] private int baseFontSize = 14; // Base font size for reference
-    [SerializeField] private float fontSizeMultiplier = 1.0f; // Adjust based on screen size
-    [SerializeField] private bool autoAdjustFontSize = true; // Automatically adjust font size based on screen
-    [SerializeField] private int minFontSize = 10; // Minimum font size
-    [SerializeField] private int maxFontSize = 20; // Maximum font size
+    [SerializeField] private int baseFontSize = 14;
+    [SerializeField] private float fontSizeMultiplier = 1.0f;
+    [SerializeField] private bool autoAdjustFontSize = true;
+    [SerializeField] private int minFontSize = 10;
+    [SerializeField] private int maxFontSize = 20;
 
     [Header("Visual Settings")]
     [SerializeField] private Color raiseColor = Color.yellow;
@@ -102,7 +102,6 @@ public class ChatManager : NetworkBehaviour
             chatCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
             chatCanvas.enabled = true;
 
-            // Get canvas rect transform
             canvasRect = chatCanvas.GetComponent<RectTransform>();
             if (canvasRect != null)
             {
@@ -110,22 +109,18 @@ public class ChatManager : NetworkBehaviour
             }
         }
 
-        // Calculate initial font size
         CalculateOptimalFontSize();
 
-        // Setup content parent
         if (chatContentParent != null)
         {
             contentParentRect = chatContentParent.GetComponent<RectTransform>();
 
-            // Add VerticalLayoutGroup for automatic spacing
             layoutGroup = chatContentParent.GetComponent<VerticalLayoutGroup>();
             if (layoutGroup == null)
             {
                 layoutGroup = chatContentParent.gameObject.AddComponent<VerticalLayoutGroup>();
             }
 
-            // Configure layout for top margin
             layoutGroup.padding = new RectOffset(10, 10, (int)topMargin, 10);
             layoutGroup.spacing = 5f;
             layoutGroup.childAlignment = TextAnchor.UpperLeft;
@@ -134,7 +129,6 @@ public class ChatManager : NetworkBehaviour
             layoutGroup.childForceExpandHeight = false;
             layoutGroup.childForceExpandWidth = false;
 
-            // Clear existing messages
             foreach (Transform child in chatContentParent)
             {
                 Destroy(child.gameObject);
@@ -143,7 +137,6 @@ public class ChatManager : NetworkBehaviour
 
         messageQueue.Clear();
 
-        // Listen for screen size changes
         InvokeRepeating("CheckScreenSize", 1f, 2f);
     }
 
@@ -154,22 +147,17 @@ public class ChatManager : NetworkBehaviour
         float screenWidth = Screen.width;
         float screenHeight = Screen.height;
 
-        // Calculate size based on screen percentage
         float chatWidth = screenWidth * widthPercentage;
         float chatHeight = screenHeight * heightPercentage;
 
-        // Set anchor to bottom-right corner
-        canvasRect.anchorMin = new Vector2(1f, 0f); // Bottom-right
-        canvasRect.anchorMax = new Vector2(1f, 0f); // Bottom-right
-        canvasRect.pivot = new Vector2(1f, 0f); // Pivot at bottom-right
+        canvasRect.anchorMin = new Vector2(1f, 0f);
+        canvasRect.anchorMax = new Vector2(1f, 0f);
+        canvasRect.pivot = new Vector2(1f, 0f);
 
-        // Set size
         canvasRect.sizeDelta = new Vector2(chatWidth, chatHeight);
 
-        // Set position with margins
         canvasRect.anchoredPosition = new Vector2(-rightMargin, bottomMargin);
 
-        // Recalculate font size when screen size changes
         if (autoAdjustFontSize)
         {
             CalculateOptimalFontSize();
@@ -186,14 +174,11 @@ public class ChatManager : NetworkBehaviour
             return;
         }
 
-        // Calculate font size based on screen height and chat size
         float screenHeight = Screen.height;
         float chatHeight = screenHeight * heightPercentage;
 
-        // Base calculation on chat height - more messages can fit with smaller font
-        float sizeMultiplier = chatHeight / 500f; // 500px chat height = base size
+        float sizeMultiplier = chatHeight / 500f;
 
-        // Apply multiplier and clamp to reasonable range
         currentFontSize = Mathf.RoundToInt(baseFontSize * sizeMultiplier * fontSizeMultiplier);
         currentFontSize = Mathf.Clamp(currentFontSize, minFontSize, maxFontSize);
 
@@ -202,14 +187,12 @@ public class ChatManager : NetworkBehaviour
 
     private void CheckScreenSize()
     {
-        // Re-adjust canvas size and position when screen size changes
         SetupCanvasSizeAndPosition();
     }
 
     private void Update()
     {
-        // Optional: Handle screen resize in real-time
-        if (Input.GetKeyDown(KeyCode.F2)) // Debug key to force resize
+        if (Input.GetKeyDown(KeyCode.F2))
         {
             SetupCanvasSizeAndPosition();
         }
@@ -380,15 +363,12 @@ public class ChatManager : NetworkBehaviour
         newMessage.text = message;
         newMessage.color = color;
 
-        // Apply the calculated font size
         newMessage.fontSize = currentFontSize;
 
-        // Enable auto-sizing for better text fitting
         newMessage.enableAutoSizing = true;
         newMessage.fontSizeMin = minFontSize;
         newMessage.fontSizeMax = maxFontSize;
 
-        // Ensure the message has proper layout element
         LayoutElement layoutElement = newMessage.GetComponent<LayoutElement>();
         if (layoutElement == null)
         {
@@ -406,7 +386,6 @@ public class ChatManager : NetworkBehaviour
             Destroy(oldestMessage);
         }
 
-        // Auto-scroll to bottom when new message is added
         StartCoroutine(ScrollToBottom());
         StartCoroutine(AutoRemoveMessage(newMessage.gameObject));
     }
@@ -442,7 +421,6 @@ public class ChatManager : NetworkBehaviour
         }
     }
 
-    // Public methods to adjust settings at runtime
     public void SetChatSize(float widthPercent, float heightPercent)
     {
         widthPercentage = Mathf.Clamp(widthPercent, 0.1f, 0.8f);

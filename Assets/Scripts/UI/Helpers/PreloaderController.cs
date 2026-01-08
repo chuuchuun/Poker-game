@@ -40,7 +40,6 @@ public class PreloaderController : MonoBehaviour
     "POKER TIP: Poker is a game of people played with cards",
     "POKER TIP: Money saved is as important as money won",
     
-    // Last 4 tips (always shown at the end)
     "Loading your poker chips...",
     "Shuffling the deck...",
     "Dealing your cards...",
@@ -60,29 +59,24 @@ public class PreloaderController : MonoBehaviour
     {
         if (enableDebugLogs) Debug.Log("[Preloader] Starting preloader...");
 
-        // First, check if our target scene exists
         if (!IsSceneInBuildSettings(targetSceneName))
         {
             Debug.LogError($"[Preloader] ERROR: Target scene '{targetSceneName}' not found in Build Settings!");
             ListAllScenesInBuildSettings();
 
-            // Show error to player
             if (loadingTipText != null)
                 loadingTipText.text = $"Error: Cannot load '{targetSceneName}'";
             return;
         }
 
-        // Initialize tips
         PrepareTips();
         ShowNextTip();
 
-        // Start loading the Main Menu scene
         StartCoroutine(LoadTargetScene());
     }
 
     void Update()
     {
-        // Update tip rotation if we have multiple tips
         if (shuffledTips.Count > 1 && !isLoadingComplete)
         {
             tipTimer += Time.deltaTime;
@@ -99,7 +93,6 @@ public class PreloaderController : MonoBehaviour
     {
         if (enableDebugLogs) Debug.Log($"[Preloader] Preparing {loadingTips.Length} tips...");
 
-        // Separate the tips
         if (loadingTips.Length <= LAST_TIPS_COUNT)
         {
             shuffledTips = new List<string>(loadingTips);
@@ -147,7 +140,6 @@ public class PreloaderController : MonoBehaviour
         float fadeDuration = 0.3f;
         float elapsedTime = 0f;
 
-        // Fade out
         while (elapsedTime < fadeDuration)
         {
             elapsedTime += Time.deltaTime;
@@ -156,7 +148,6 @@ public class PreloaderController : MonoBehaviour
             yield return null;
         }
 
-        // Fade in
         elapsedTime = 0f;
         while (elapsedTime < fadeDuration)
         {
@@ -187,7 +178,6 @@ public class PreloaderController : MonoBehaviour
     {
         if (enableDebugLogs) Debug.Log($"[Preloader] Starting to load: {targetSceneName}");
 
-        // Start loading the Main Menu scene asynchronously
         loadingOperation = SceneManager.LoadSceneAsync(targetSceneName);
 
         if (loadingOperation == null)
@@ -196,31 +186,25 @@ public class PreloaderController : MonoBehaviour
             yield break;
         }
 
-        // Don't allow scene activation immediately
         loadingOperation.allowSceneActivation = false;
 
-        // Reset values
         loadProgress = 0f;
         timer = 0f;
         isLoadingComplete = false;
 
         if (enableDebugLogs) Debug.Log("[Preloader] Entering loading loop...");
 
-        // Loading loop
         while (!isLoadingComplete)
         {
             timer += Time.deltaTime;
 
-            // Calculate progress
             float operationProgress = Mathf.Clamp01(loadingOperation.progress / 0.9f);
 
             if (enableDebugLogs && Time.frameCount % 30 == 0)
                 Debug.Log($"[Preloader] Progress: {operationProgress:F2}, Timer: {timer:F2}");
 
-            // Smooth progress
             loadProgress = Mathf.Lerp(loadProgress, operationProgress, Time.deltaTime * 5f);
 
-            // Ensure minimum load time
             if (timer >= minimumLoadTime && operationProgress >= 0.9f)
             {
                 loadProgress = 1f;
@@ -228,7 +212,6 @@ public class PreloaderController : MonoBehaviour
                 if (enableDebugLogs) Debug.Log("[Preloader] Loading complete!");
             }
 
-            // Update UI
             UpdateProgressUI();
 
             yield return null;
@@ -236,12 +219,10 @@ public class PreloaderController : MonoBehaviour
 
         if (enableDebugLogs) Debug.Log("[Preloader] Starting fade out...");
 
-        // Add a final fade out before switching scenes
         yield return StartCoroutine(FadeOutLoadingScreen());
 
         if (enableDebugLogs) Debug.Log("[Preloader] Activating scene...");
 
-        // Allow scene activation - this will switch to Main Menu scene
         loadingOperation.allowSceneActivation = true;
     }
 
@@ -261,14 +242,12 @@ public class PreloaderController : MonoBehaviour
 
     IEnumerator FadeOutLoadingScreen()
     {
-        // Get the CanvasGroup of the entire loading screen
         CanvasGroup canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null)
         {
             canvasGroup = gameObject.AddComponent<CanvasGroup>();
         }
 
-        // Fade out over 0.5 seconds
         float fadeTime = 0.5f;
         float elapsedTime = 0f;
 
@@ -305,13 +284,10 @@ public class PreloaderController : MonoBehaviour
         }
         Debug.Log("===============================");
     }
-
-    // FIXED OnValidate method
     void OnValidate()
     {
         Debug.Log("[Preloader OnValidate] Checking scenes...");
 
-        // Ensure target scene exists in Build Settings
         if (!string.IsNullOrEmpty(targetSceneName))
         {
             bool sceneExists = false;
@@ -319,7 +295,7 @@ public class PreloaderController : MonoBehaviour
             {
                 string scenePath = SceneUtility.GetScenePathByBuildIndex(i);
                 string sceneName = System.IO.Path.GetFileNameWithoutExtension(scenePath);
-                if (sceneName == targetSceneName)  // Using variable, NOT hardcoded
+                if (sceneName == targetSceneName)
                 {
                     sceneExists = true;
                     Debug.Log($"[Preloader OnValidate] ✓ Found scene: {targetSceneName}");
@@ -329,7 +305,6 @@ public class PreloaderController : MonoBehaviour
 
             if (!sceneExists)
             {
-                // USING THE VARIABLE, not hardcoded "MainMenu"
                 Debug.LogWarning($"[Preloader OnValidate] Scene '{targetSceneName}' not found in Build Settings!");
                 ListAllScenesInBuildSettings();
             }

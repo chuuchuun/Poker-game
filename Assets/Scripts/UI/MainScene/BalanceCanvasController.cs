@@ -71,14 +71,12 @@ public class BalanceCanvasController : MonoBehaviour
 
     private void FindMissingReferences()
     {
-        // If inspector-assigned behaviour implements IPlayerController, use it.
         if (playerControllerBehaviour != null && playerControllerBehaviour is IPlayerController ic)
         {
             playerController = ic;
         }
         else
         {
-            // Otherwise search parents for any MonoBehaviour that implements IPlayerController
             var comps = GetComponentsInParent<MonoBehaviour>(includeInactive: true);
             playerController = comps.OfType<IPlayerController>().FirstOrDefault();
             playerControllerBehaviour = (playerController as MonoBehaviour);
@@ -132,7 +130,6 @@ public class BalanceCanvasController : MonoBehaviour
 
     private void UpdateCanvasPosition()
     {
-        // Need a Transform - attempt to use the MonoBehaviour backing the interface
         var mb = playerController as MonoBehaviour ?? playerControllerBehaviour;
         if (mb != null && balanceCanvas != null)
         {
@@ -140,7 +137,6 @@ public class BalanceCanvasController : MonoBehaviour
         }
     }
 
-    // Accept IPlayerController so callers can pass PlayerController or BotController
     public void Initialize(IPlayerController controller, Canvas canvas = null, TMP_Text text = null)
     {
         playerController = controller;

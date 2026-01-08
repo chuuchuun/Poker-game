@@ -11,7 +11,6 @@ public class PlayerCameraManager : NetworkBehaviour
         playerCamera = GetComponentInChildren<Camera>();
         audioListener = GetComponentInParent<AudioListener>();
 
-        // Ensure AudioListener exists
         if (audioListener == null && playerCamera != null)
         {
             audioListener = playerCamera.gameObject.AddComponent<AudioListener>();

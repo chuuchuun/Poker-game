@@ -66,7 +66,6 @@ public class ChatMessageController : NetworkBehaviour
             chatCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
         }
 
-        // Clear any existing messages
         foreach (Transform child in chatContentParent)
         {
             Destroy(child.gameObject);
@@ -77,7 +76,6 @@ public class ChatMessageController : NetworkBehaviour
 
     #region Public API for Other Classes
 
-    // Player Action Messages
     [ServerRpc(RequireOwnership = false)]
     public void SendPlayerActionServerRpc(ulong playerId, BetAction action, int amount = 0)
     {
@@ -90,7 +88,6 @@ public class ChatMessageController : NetworkBehaviour
         Debug.Log($"[Chat] {message}");
     }
 
-    // Game State Messages
     [ServerRpc(RequireOwnership = false)]
     public void SendGameMessageServerRpc(string message)
     {
@@ -100,7 +97,6 @@ public class ChatMessageController : NetworkBehaviour
         Debug.Log($"[Chat] Game: {message}");
     }
 
-    // Player Connection Messages
     [ServerRpc(RequireOwnership = false)]
     public void SendPlayerJoinedServerRpc(ulong playerId)
     {
@@ -121,7 +117,6 @@ public class ChatMessageController : NetworkBehaviour
         Debug.Log($"[Chat] {message}");
     }
 
-    // Round and Game Messages
     [ServerRpc(RequireOwnership = false)]
     public void SendRoundStartServerRpc(ulong firstPlayerId)
     {
@@ -240,22 +235,18 @@ public class ChatMessageController : NetworkBehaviour
     {
         if (chatTextPrefab == null || chatContentParent == null) return;
 
-        // Create new message
         TMP_Text newMessage = Instantiate(chatTextPrefab, chatContentParent);
         newMessage.text = message;
         newMessage.color = color;
 
-        // Add to queue
         messageQueue.Enqueue(newMessage.gameObject);
 
-        // Manage queue size
         if (messageQueue.Count > maxMessages)
         {
             GameObject oldestMessage = messageQueue.Dequeue();
             Destroy(oldestMessage);
         }
 
-        // Auto-remove after lifetime
         StartCoroutine(AutoRemoveMessage(newMessage.gameObject));
     }
 
@@ -265,7 +256,6 @@ public class ChatMessageController : NetworkBehaviour
 
         if (messageObject != null && messageQueue.Contains(messageObject))
         {
-            // Create a new queue without the expired message
             var newQueue = new Queue<GameObject>();
             foreach (var msg in messageQueue)
             {
@@ -298,7 +288,6 @@ public class ChatMessageController : NetworkBehaviour
         }
     }
 
-    // Quick send methods for convenience
     public void QuickPlayerAction(ulong playerId, BetAction action, int amount = 0)
     {
         if (IsServer)
